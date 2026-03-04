@@ -22,7 +22,23 @@ function mapType(typeName: string): 'introduction' | 'resolution' | null {
   return null
 }
 
-// Step 1: Sync NYC Council members into the legislators table
+// Title priority — if someone has multiple office records, use the most specific title
+const TITLE_PRIORITY: Record<string, number> = {
+  'Speaker': 1,
+  'Public Advocate': 2,
+  'Majority Leader': 3,
+  'Minority Leader': 4,
+  'Deputy Speaker': 5,
+  'Majority Whip': 6,
+  'Minority Whip': 7,
+  'Council Member': 8,
+}
+
+function bestTitle(titles: string[]): string {
+  return titles.sort((a, b) => (TITLE_PRIORITY[a] ?? 99) - (TITLE_PRIORITY[b] ?? 99))[0] ?? 'Council Member'
+}
+
+// Step 1: Sync NYC Council members + Public Advocate into the legislators table
 export async function syncCouncilMembers(): Promise<number> {
   const supabase = createServiceClient()
 
@@ -34,21 +50,30 @@ export async function syncCouncilMembers(): Promise<number> {
 
   if (!legislature) throw new Error('NYC Council legislature not found in DB')
 
-  const [persons, officeRecords] = await Promise.all([
+  const [persons, councilRecords, paRecords] = await Promise.all([
     legistar.getPersons(),
     legistar.getOfficeRecords({ '$filter': "OfficeRecordBodyName eq 'City Council'" }),
+    legistar.getOfficeRecords({ '$filter': "OfficeRecordBodyName eq 'Public Advocate'" }),
   ])
 
-  // Only people with an active City Council office record
-  const councilPersonIds = new Set(officeRecords.map(r => r.OfficeRecordPersonId))
-  const councilMembers = persons.filter(p => councilPersonIds.has(p.PersonId))
+  // Build a map of personId → all their titles across relevant bodies
+  const personTitles = new Map<number, string[]>()
+  for (const record of [...councilRecords, ...paRecords]) {
+    const title = record.OfficeRecordTitle || 'Council Member'
+    const existing = personTitles.get(record.OfficeRecordPersonId) ?? []
+    personTitles.set(record.OfficeRecordPersonId, [...existing, title])
+  }
 
-  const rows = councilMembers.map(person => ({
+  const relevantPersonIds = new Set(personTitles.keys())
+  const relevantPersons = persons.filter(p => relevantPersonIds.has(p.PersonId))
+
+  const rows = relevantPersons.map(person => ({
     legislature_id: legislature.id,
     full_name: person.PersonFullName,
     slug: toSlug(person.PersonFullName),
     email: person.PersonEmail || null,
     is_active: person.PersonActiveFlag === 1,
+    title: bestTitle(personTitles.get(person.PersonId) ?? ['Council Member']),
   }))
 
   const { error } = await supabase
