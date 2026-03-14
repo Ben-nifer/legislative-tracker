@@ -130,13 +130,11 @@ async function getLegislation(slug: string): Promise<LegislationDetail | null> {
   const statsRow = Array.isArray(data.stats) ? data.stats[0] : data.stats
 
   const sponsors: Sponsor[] = (data.sponsorships ?? [])
-    .filter((s: { legislator: { full_name: string; slug: string; district: number | null } | null }) => s.legislator)
-    .map((s: { is_primary: boolean; legislator: { full_name: string; slug: string; district: number | null } }) => ({
-      full_name: s.legislator.full_name,
-      slug: s.legislator.slug,
-      district: s.legislator.district,
-      is_primary: s.is_primary,
-    }))
+    .flatMap((s) => {
+      const legislator = Array.isArray(s.legislator) ? s.legislator[0] : s.legislator
+      if (!legislator) return []
+      return [{ full_name: legislator.full_name, slug: legislator.slug, district: legislator.district, is_primary: s.is_primary }]
+    })
     .sort((a: Sponsor, b: Sponsor) => Number(b.is_primary) - Number(a.is_primary))
 
   const upcomingHearings: Hearing[] = (data.events ?? [])

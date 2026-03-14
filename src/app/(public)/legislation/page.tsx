@@ -53,9 +53,12 @@ async function getLegislation(): Promise<LegislationCardData[]> {
 
   // Shape raw rows into LegislationCardData
   return (data ?? []).map((row) => {
-    const primarySponsorship = (row.sponsorships ?? []).find(
-      (s: { is_primary: boolean; legislator: { full_name: string; slug: string } | null }) => s.is_primary
-    )
+    const primarySponsorship = (row.sponsorships ?? []).find((s) => s.is_primary)
+    const primaryLegislator = primarySponsorship
+      ? Array.isArray(primarySponsorship.legislator)
+        ? primarySponsorship.legislator[0]
+        : primarySponsorship.legislator
+      : null
 
     // legislation_stats is a 1-to-1 relation returned as an array by Supabase
     const statsRow = Array.isArray(row.stats) ? row.stats[0] : row.stats
@@ -81,8 +84,8 @@ async function getLegislation(): Promise<LegislationCardData[]> {
             bookmark_count: statsRow.bookmark_count ?? 0,
           }
         : null,
-      primary_sponsor: primarySponsorship?.legislator?.full_name ?? null,
-      primary_sponsor_slug: primarySponsorship?.legislator?.slug ?? null,
+      primary_sponsor: primaryLegislator?.full_name ?? null,
+      primary_sponsor_slug: primaryLegislator?.slug ?? null,
     }
   })
 }
