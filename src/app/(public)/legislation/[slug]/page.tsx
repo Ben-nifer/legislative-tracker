@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import ViewLogger from '@/components/legislation/ViewLogger'
 import {
   ThumbsUp,
   ThumbsDown,
@@ -236,6 +237,7 @@ export default async function LegislationDetailPage({
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
+      <ViewLogger legislationId={legislation.id} />
       {/* Back nav */}
       <div className="border-b border-slate-800 bg-slate-900/60 px-4 py-3 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-4xl">

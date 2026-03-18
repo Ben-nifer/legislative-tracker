@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/refresh-stats",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-legislation",
+      "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/send-digests",
+      "schedule": "0 9 * * *"
+    }
+  ]
+}

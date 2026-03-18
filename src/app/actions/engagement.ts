@@ -1,9 +1,33 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServerSupabaseClient, createServiceClient } from '@/lib/supabase/server'
 
 export type Stance = 'support' | 'oppose' | 'neutral' | 'watching'
+
+/**
+ * Log an engagement event for trending calculations.
+ * Uses the service client to bypass RLS — safe because we're only inserting
+ * append-only analytics rows, not reading or mutating user data.
+ */
+export async function logEngagement(
+  legislationId: string,
+  eventType: 'view' | 'stance' | 'comment' | 'bookmark'
+): Promise<void> {
+  try {
+    const supabase = createServiceClient()
+    const userClient = await createServerSupabaseClient()
+    const { data: { user } } = await userClient.auth.getUser()
+
+    await supabase.from('engagement_events').insert({
+      legislation_id: legislationId,
+      user_id: user?.id ?? null,
+      event_type: eventType,
+    })
+  } catch {
+    // Engagement logging is best-effort — never block the main action
+  }
+}
 
 /**
  * Set or clear a user's stance on a piece of legislation.
@@ -39,6 +63,7 @@ export async function setStance(
     )
 
     if (error) return { error: error.message }
+    await logEngagement(legislationId, 'stance')
   }
 
   revalidatePath('/legislation')
@@ -86,6 +111,7 @@ export async function toggleBookmark(
 
     if (error) return { bookmarked: false, error: error.message }
 
+    await logEngagement(legislationId, 'bookmark')
     revalidatePath('/legislation')
     revalidatePath('/')
     return { bookmarked: true }

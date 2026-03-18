@@ -15,8 +15,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: 'NYC Legislative Tracker',
-  description:
-    'Track, understand, and engage with New York City Council legislation.',
+  description: 'Track, understand, and engage with New York City Council legislation.',
 }
 
 export default function RootLayout({

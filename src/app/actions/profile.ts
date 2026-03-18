@@ -25,3 +25,22 @@ export async function updateProfile(formData: {
   revalidatePath('/profile')
   return {}
 }
+
+export async function setEmailDigests(
+  enabled: boolean
+): Promise<{ error?: string }> {
+  const supabase = await createServerSupabaseClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) return { error: 'Not authenticated' }
+
+  const { error } = await supabase
+    .from('user_profiles')
+    .update({ email_digests_enabled: enabled })
+    .eq('id', user.id)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/settings/notifications')
+  return {}
+}
