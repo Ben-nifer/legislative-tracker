@@ -1,6 +1,11 @@
 import { Resend } from 'resend'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+// Lazy-initialize so the build doesn't fail when RESEND_API_KEY isn't set
+let _resend: Resend | null = null
+function getResend() {
+  if (!_resend) _resend = new Resend(process.env.RESEND_API_KEY)
+  return _resend
+}
 
 // The "from" address must be a verified domain in your Resend account.
 // During development you can use: onboarding@resend.dev (sends to your account email only)
@@ -93,7 +98,7 @@ export async function sendDigestEmail({
 </body>
 </html>`
 
-  const { error } = await resend.emails.send({
+  const { error } = await getResend().emails.send({
     from: FROM,
     to,
     subject: `Your NYC Legislative Tracker digest — ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}`,
