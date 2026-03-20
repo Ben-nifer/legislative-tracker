@@ -34,7 +34,7 @@ export default async function ProfilePage() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
             { label: 'Supporting', value: supportCount ?? 0, color: 'text-emerald-400' },
             { label: 'Opposing', value: opposeCount ?? 0, color: 'text-red-400' },

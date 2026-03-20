@@ -15,6 +15,7 @@ import {
   User,
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
+import { toggleBookmark } from '@/app/actions/engagement'
 
 export type LegislationCardData = {
   id: string
@@ -134,7 +135,11 @@ export default function LegislationCard({
               className={`text-slate-500 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}
             />
             <button
-              onClick={(e) => { e.stopPropagation(); setBookmarked((b) => !b) }}
+              onClick={async (e) => {
+                e.stopPropagation()
+                setBookmarked((b) => !b)
+                await toggleBookmark(legislation.id)
+              }}
               aria-label={bookmarked ? 'Remove bookmark' : 'Bookmark'}
               className={`rounded-md p-1.5 transition-colors ${
                 bookmarked
