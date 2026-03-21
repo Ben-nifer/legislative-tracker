@@ -1,5 +1,13 @@
 // Raw types returned by the NYC Council Legistar API
 
+export interface LegistarMatterSponsor {
+  MatterSponsorId: number
+  MatterSponsorMatterId: number
+  MatterSponsorNameId: number   // PersonId of the sponsor
+  MatterSponsorName: string     // Full name of the sponsor
+  MatterSponsorSequence: number // 1 = primary sponsor
+}
+
 export interface LegistarMatter {
   MatterId: number
   MatterFile: string         // e.g. "Int 0001-2024"
@@ -13,6 +21,7 @@ export interface LegistarMatter {
   MatterPassedDate: string
   MatterEnactmentDate: string
   MatterText1: string        // Official summary/description
+  MatterSponsors?: LegistarMatterSponsor[]  // Populated when $expand=MatterSponsors is used
 }
 
 export interface LegistarPerson {
@@ -22,6 +31,7 @@ export interface LegistarPerson {
   PersonEmail: string
   PersonPhone: string
   PersonWWW: string
+  PersonPhotoFileName: string | null  // filename for photo, e.g. "12345.jpg"
 }
 
 export interface LegistarOfficeRecord {

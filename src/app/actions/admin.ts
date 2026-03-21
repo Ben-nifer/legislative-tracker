@@ -2,6 +2,7 @@
 
 import { createServerSupabaseClient, createServiceClient } from '@/lib/supabase/server'
 import { summarizeLegislation } from '@/lib/ai/summarize'
+import { syncSponsorships } from '@/lib/legistar/sync'
 
 // Predefined topics for NYC Council legislation
 const PREDEFINED_TOPICS = [
@@ -36,6 +37,26 @@ async function assertAdmin() {
     .single()
 
   if (!profile?.is_admin) throw new Error('Not authorized')
+}
+
+/**
+ * Syncs one batch of sponsorships from Legistar (30 bills at a time).
+ */
+export async function runSyncSponsorships(
+  offset = 0
+): Promise<{ synced: number; offset: number; total: number; done: boolean; apiFailed: number; unmatched: number; sponsorsFound: number; error?: string }> {
+  try {
+    await assertAdmin()
+  } catch (e) {
+    return { synced: 0, offset, total: 0, done: true, apiFailed: 0, unmatched: 0, sponsorsFound: 0, error: String(e) }
+  }
+
+  try {
+    const result = await syncSponsorships(offset)
+    return result
+  } catch (e) {
+    return { synced: 0, offset, total: 0, done: true, apiFailed: 0, unmatched: 0, sponsorsFound: 0, error: String(e) }
+  }
 }
 
 /**

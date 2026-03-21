@@ -74,6 +74,9 @@ export async function syncCouncilMembers(): Promise<number> {
     email: person.PersonEmail || null,
     is_active: person.PersonActiveFlag === 1,
     title: bestTitle(personTitles.get(person.PersonId) ?? ['Council Member']),
+    photo_url: person.PersonPhotoFileName
+      ? `https://legistar.council.nyc.gov/Photos/${person.PersonPhotoFileName}`
+      : null,
   }))
 
   const { error } = await supabase
@@ -128,7 +131,96 @@ export async function syncLegislation(since = '2022-01-01'): Promise<number> {
   return synced
 }
 
-// Step 3: Create empty stats rows for any legislation that doesn't have one yet
+// Step 3: Sync sponsorships — offset-based pagination, 30 bills at a time.
+// Returns offset to pass into the next call. Done when done=true.
+export async function syncSponsorships(
+  offset = 0,
+  concurrency = 30
+): Promise<{ synced: number; offset: number; total: number; done: boolean; apiFailed: number; unmatched: number }> {
+  const supabase = createServiceClient()
+
+  // Build legislator lookups: slug → id AND normalized name → id
+  const { data: legislators } = await supabase
+    .from('legislators')
+    .select('id, slug, full_name')
+
+  const legislatorBySlug = new Map(
+    (legislators ?? []).map((l) => [l.slug, l.id])
+  )
+  const legislatorByName = new Map(
+    (legislators ?? []).map((l) => [l.full_name.toLowerCase().trim(), l.id])
+  )
+
+  function findLegislator(sponsorName: string): string | undefined {
+    // Try slug match first
+    const bySlug = legislatorBySlug.get(toSlug(sponsorName))
+    if (bySlug) return bySlug
+    // Fall back to normalized name match
+    return legislatorByName.get(sponsorName.toLowerCase().trim())
+  }
+
+  // Fetch a page of legislation with legistar URLs (oldest first — they reliably have sponsors)
+  const { data: batch, count: total } = await supabase
+    .from('legislation')
+    .select('id, legistar_url', { count: 'exact' })
+    .not('legistar_url', 'is', null)
+    .not('intro_date', 'is', null)
+    .order('intro_date', { ascending: true })
+    .range(offset, offset + concurrency - 1)
+
+  if (!batch || batch.length === 0) {
+    return { synced: 0, offset, total: total ?? 0, done: true, apiFailed: 0, unmatched: 0, sponsorsFound: 0 }
+  }
+
+  // Fetch sponsors for each bill concurrently
+  const results = await Promise.allSettled(
+    batch.map(async (item) => {
+      const matterId = new URL(item.legistar_url!).searchParams.get('ID')
+      if (!matterId) return []
+      const sponsors = await legistar.getMatterSponsors(Number(matterId))
+      return sponsors.map((s) => ({
+        legislation_id: item.id,
+        legislator_id: findLegislator(s.MatterSponsorName),
+        sponsorName: s.MatterSponsorName,
+        is_primary: s.MatterSponsorSequence === 1,
+      }))
+    })
+  )
+
+  // Collect valid rows and track misses
+  const rows: { legislation_id: string; legislator_id: string; is_primary: boolean }[] = []
+  let apiFailed = 0
+  let unmatched = 0
+  let sponsorsFound = 0
+
+  for (const result of results) {
+    if (result.status !== 'fulfilled') {
+      apiFailed++
+      continue
+    }
+    for (const row of result.value) {
+      sponsorsFound++
+      if (row.legislator_id) {
+        rows.push({ legislation_id: row.legislation_id, legislator_id: row.legislator_id, is_primary: row.is_primary })
+      } else {
+        unmatched++
+      }
+    }
+  }
+
+  if (rows.length > 0) {
+    await supabase
+      .from('sponsorships')
+      .upsert(rows, { onConflict: 'legislation_id,legislator_id' })
+  }
+
+  const nextOffset = offset + concurrency
+  const done = nextOffset >= (total ?? 0)
+
+  return { synced: rows.length, offset: nextOffset, total: total ?? 0, done, apiFailed, unmatched, sponsorsFound }
+}
+
+// Step 4: Create empty stats rows for any legislation that doesn't have one yet
 export async function initializeMissingStats(): Promise<number> {
   const supabase = createServiceClient()
 
@@ -169,8 +261,11 @@ export async function fullSync(since = '2022-01-01') {
   const legislation = await syncLegislation(since)
   console.log(`✅ Synced ${legislation} pieces of legislation`)
 
+  const sponsorships = await syncSponsorships(since)
+  console.log(`✅ Synced ${sponsorships} sponsorships`)
+
   const stats = await initializeMissingStats()
   console.log(`✅ Initialized stats for ${stats} legislation items`)
 
-  return { legislators, legislation, stats }
+  return { legislators, legislation, sponsorships, stats }
 }

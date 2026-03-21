@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { ArrowLeft, Mail, MapPin, FileText } from 'lucide-react'
 import { format } from 'date-fns'
 import FollowButton from '@/components/council/FollowButton'
+import MemberAvatar from '@/components/council/MemberAvatar'
 
 export const revalidate = 3600
 
@@ -28,6 +29,50 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     .maybeSingle()
   if (!data) return { title: 'Not Found' }
   return { title: `${data.full_name} | NYC Legislative Tracker` }
+}
+
+type Bill = { id: string; slug: string; file_number: string; title: string; status: string; intro_date: string | null }
+
+function BillSection({ title, bills }: { title: string; bills: Bill[] }) {
+  return (
+    <section>
+      <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
+        <FileText size={14} />
+        {title}
+        {bills.length > 0 && (
+          <span className="rounded-full bg-slate-700 px-2 py-0.5 text-xs normal-case text-slate-300">
+            {bills.length}
+          </span>
+        )}
+      </h2>
+      {bills.length === 0 ? (
+        <p className="text-sm italic text-slate-600">None found.</p>
+      ) : (
+        <div className="space-y-3">
+          {bills.map((item) => (
+            <Link
+              key={item.id}
+              href={`/legislation/${item.slug}`}
+              className="block rounded-xl border border-slate-800 bg-slate-900/60 p-4 transition-colors hover:border-slate-700 hover:bg-slate-800/60"
+            >
+              <div className="mb-2 flex items-center gap-2">
+                <span className={`rounded-full px-2 py-0.5 text-xs ${getStatusStyle(item.status)}`}>
+                  {item.status}
+                </span>
+                <span className="font-mono text-xs text-slate-500">{item.file_number}</span>
+                {item.intro_date && (
+                  <span className="ml-auto text-xs text-slate-600">
+                    {format(new Date(item.intro_date), 'MMM d, yyyy')}
+                  </span>
+                )}
+              </div>
+              <p className="line-clamp-2 text-sm text-slate-300">{item.title}</p>
+            </Link>
+          ))}
+        </div>
+      )}
+    </section>
+  )
 }
 
 export default async function CouncilMemberPage({
@@ -67,26 +112,23 @@ export default async function CouncilMemberPage({
     `)
     .eq('legislator_id', member.id)
     .order('legislation(intro_date)', { ascending: false })
-    .limit(20)
+    .limit(60)
 
-  const sponsored = (sponsorships ?? [])
+  const primaryBills = (sponsorships ?? [])
+    .filter((s) => s.is_primary)
     .flatMap((s) => {
       const leg = Array.isArray(s.legislation) ? s.legislation[0] : s.legislation
-      if (!leg) return []
-      return [{ ...leg, is_primary: s.is_primary }]
+      return leg ? [leg] : []
     })
-    .sort((a, b) => {
-      // Primary sponsorships first, then by date
-      if (a.is_primary !== b.is_primary) return a.is_primary ? -1 : 1
-      return new Date(b.intro_date ?? 0).getTime() - new Date(a.intro_date ?? 0).getTime()
-    })
+    .slice(0, 30)
 
-  const initials = member.full_name
-    .split(' ')
-    .map((n: string) => n[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase()
+  const coBills = (sponsorships ?? [])
+    .filter((s) => !s.is_primary)
+    .flatMap((s) => {
+      const leg = Array.isArray(s.legislation) ? s.legislation[0] : s.legislation
+      return leg ? [leg] : []
+    })
+    .slice(0, 30)
 
   return (
     <main className="min-h-screen bg-slate-950">
@@ -105,9 +147,7 @@ export default async function CouncilMemberPage({
       <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8 space-y-6">
         {/* Profile header */}
         <section className="flex items-start gap-5">
-          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-indigo-500/20 text-xl font-bold text-indigo-300">
-            {initials}
-          </div>
+          <MemberAvatar name={member.full_name} photoUrl={member.photo_url} size="lg" />
           <div className="flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-2xl font-bold text-white">{member.full_name}</h1>
@@ -147,51 +187,11 @@ export default async function CouncilMemberPage({
           </div>
         </section>
 
-        {/* Sponsored legislation */}
-        <section>
-          <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
-            <FileText size={14} /> Sponsored Legislation
-            {sponsored.length > 0 && (
-              <span className="rounded-full bg-slate-700 px-2 py-0.5 text-xs normal-case text-slate-300">
-                {sponsored.length}
-              </span>
-            )}
-          </h2>
+        {/* Primary sponsored legislation */}
+        <BillSection title="Primary Sponsor" bills={primaryBills} />
 
-          {sponsored.length === 0 ? (
-            <p className="text-sm italic text-slate-600">
-              No sponsored legislation found. Sponsor data syncs separately.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {sponsored.map((item) => (
-                <Link
-                  key={item.id}
-                  href={`/legislation/${item.slug}`}
-                  className="block rounded-xl border border-slate-800 bg-slate-900/60 p-4 transition-colors hover:border-slate-700 hover:bg-slate-800/60"
-                >
-                  <div className="mb-2 flex items-center gap-2">
-                    <span className={`rounded-full px-2 py-0.5 text-xs ${getStatusStyle(item.status)}`}>
-                      {item.status}
-                    </span>
-                    <span className="font-mono text-xs text-slate-500">{item.file_number}</span>
-                    {item.is_primary && (
-                      <span className="rounded-full bg-indigo-500/20 px-2 py-0.5 text-xs text-indigo-300">
-                        Primary
-                      </span>
-                    )}
-                    {item.intro_date && (
-                      <span className="ml-auto text-xs text-slate-600">
-                        {format(new Date(item.intro_date), 'MMM d, yyyy')}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-sm text-slate-300 line-clamp-2">{item.title}</p>
-                </Link>
-              ))}
-            </div>
-          )}
-        </section>
+        {/* Co-sponsored legislation */}
+        <BillSection title="Co-Sponsored" bills={coBills} />
       </div>
     </main>
   )
