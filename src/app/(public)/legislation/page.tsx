@@ -2,20 +2,61 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import LegislationCard, {
   type LegislationCardData,
 } from '@/components/legislation/LegislationCard'
+import LegislationFilters from '@/components/legislation/LegislationFilters'
 import { FileText } from 'lucide-react'
+import { Suspense } from 'react'
 
 export const metadata = {
   title: 'Browse Legislation | NYC Legislative Tracker',
   description: 'Browse and search New York City Council legislation.',
 }
 
-// Revalidate every 5 minutes — legislation data changes infrequently
-export const revalidate = 300
+// Don't cache filtered results — each URL is unique
+export const revalidate = 0
 
-async function getLegislation(): Promise<LegislationCardData[]> {
+type Filters = {
+  q?: string
+  status?: string
+  type?: string
+  topic_id?: string
+  sort?: string
+}
+
+async function getFilterOptions() {
   const supabase = await createServerSupabaseClient()
 
-  const { data, error } = await supabase
+  const [{ data: statusRows }, { data: topics }] = await Promise.all([
+    supabase
+      .from('legislation')
+      .select('status')
+      .not('status', 'is', null)
+      .order('status'),
+    supabase
+      .from('legislation_topics')
+      .select('topic:topics(id, name)')
+      .limit(1000),
+  ])
+
+  // Deduplicate statuses
+  const statuses = [...new Set((statusRows ?? []).map((r) => r.status as string))].sort()
+
+  // Deduplicate topics that are actually linked to legislation
+  const topicMap = new Map<string, { id: string; name: string }>()
+  for (const row of topics ?? []) {
+    const t = Array.isArray(row.topic) ? row.topic[0] : row.topic
+    if (t && !topicMap.has(t.id)) topicMap.set(t.id, t)
+  }
+  const linkedTopics = [...topicMap.values()].sort((a, b) => a.name.localeCompare(b.name))
+
+  return { statuses, topics: linkedTopics }
+}
+
+async function getLegislation(filters: Filters): Promise<LegislationCardData[]> {
+  const supabase = await createServerSupabaseClient()
+
+  const sortByEngagement = !filters.sort || filters.sort === 'most_engaged'
+
+  let query = supabase
     .from('legislation')
     .select(
       `
@@ -35,7 +76,8 @@ async function getLegislation(): Promise<LegislationCardData[]> {
         neutral_count,
         watching_count,
         comment_count,
-        bookmark_count
+        bookmark_count,
+        trending_score
       ),
       sponsorships(
         is_primary,
@@ -43,15 +85,47 @@ async function getLegislation(): Promise<LegislationCardData[]> {
       )
     `
     )
-    .order('intro_date', { ascending: false })
     .limit(60)
+
+  if (sortByEngagement) {
+    query = query.order('trending_score', { referencedTable: 'legislation_stats', ascending: false, nullsFirst: false })
+  } else {
+    query = query.order('intro_date', { ascending: false })
+  }
+
+  if (filters.q) {
+    query = query.or(
+      `title.ilike.%${filters.q}%,ai_summary.ilike.%${filters.q}%,official_summary.ilike.%${filters.q}%`
+    )
+  }
+
+  if (filters.status) {
+    query = query.eq('status', filters.status)
+  }
+
+  if (filters.type) {
+    query = query.ilike('type', `%${filters.type}%`)
+  }
+
+  // Topic filter: get matching legislation IDs first, then filter
+  if (filters.topic_id) {
+    const { data: topicLinks } = await supabase
+      .from('legislation_topics')
+      .select('legislation_id')
+      .eq('topic_id', filters.topic_id)
+
+    const ids = (topicLinks ?? []).map((r) => r.legislation_id)
+    if (ids.length === 0) return []
+    query = query.in('id', ids)
+  }
+
+  const { data, error } = await query
 
   if (error) {
     console.error('Error fetching legislation:', error.message)
     return []
   }
 
-  // Shape raw rows into LegislationCardData
   return (data ?? []).map((row) => {
     const primarySponsorship = (row.sponsorships ?? []).find((s) => s.is_primary)
     const primaryLegislator = primarySponsorship
@@ -60,7 +134,6 @@ async function getLegislation(): Promise<LegislationCardData[]> {
         : primarySponsorship.legislator
       : null
 
-    // legislation_stats is a 1-to-1 relation returned as an array by Supabase
     const statsRow = Array.isArray(row.stats) ? row.stats[0] : row.stats
 
     return {
@@ -90,8 +163,26 @@ async function getLegislation(): Promise<LegislationCardData[]> {
   })
 }
 
-export default async function LegislationPage() {
-  const legislation = await getLegislation()
+export default async function LegislationPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; status?: string; type?: string; topic_id?: string; sort?: string }>
+}) {
+  const params = await searchParams
+  const filters: Filters = {
+    q: params.q,
+    status: params.status,
+    type: params.type,
+    topic_id: params.topic_id,
+    sort: params.sort,
+  }
+
+  const [legislation, { statuses, topics }] = await Promise.all([
+    getLegislation(filters),
+    getFilterOptions(),
+  ])
+
+  const hasFilters = Object.values(filters).some(Boolean)
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
@@ -105,25 +196,31 @@ export default async function LegislationPage() {
                 NYC Council Legislation
               </h1>
               <p className="mt-0.5 text-sm text-slate-400">
-                Browse bills and resolutions introduced in the New York City
-                Council
+                Browse bills and resolutions introduced in the New York City Council
               </p>
             </div>
           </div>
 
+          {/* Filters */}
+          <div className="mt-6">
+            <Suspense>
+              <LegislationFilters statuses={statuses} topics={topics} />
+            </Suspense>
+          </div>
+
           {/* Result count */}
-          {legislation.length > 0 && (
-            <p className="mt-4 text-xs text-slate-500">
-              Showing {legislation.length} most recently introduced items
-            </p>
-          )}
+          <p className="mt-4 text-xs text-slate-500">
+            {hasFilters
+              ? `${legislation.length} result${legislation.length === 1 ? '' : 's'} found`
+              : `Showing ${legislation.length} most recently introduced items`}
+          </p>
         </div>
       </div>
 
       {/* Grid */}
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {legislation.length === 0 ? (
-          <EmptyState />
+          <EmptyState hasFilters={hasFilters} />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {legislation.map((item) => (
@@ -136,16 +233,17 @@ export default async function LegislationPage() {
   )
 }
 
-function EmptyState() {
+function EmptyState({ hasFilters }: { hasFilters: boolean }) {
   return (
     <div className="flex flex-col items-center justify-center py-24 text-center">
       <FileText className="mb-4 text-slate-700" size={48} />
       <h2 className="mb-2 text-lg font-semibold text-slate-400">
-        No legislation yet
+        {hasFilters ? 'No results found' : 'No legislation yet'}
       </h2>
       <p className="max-w-sm text-sm text-slate-600">
-        Legislation will appear here once the Legistar sync has run. Check back
-        soon.
+        {hasFilters
+          ? 'Try adjusting your filters or search term.'
+          : 'Legislation will appear here once the Legistar sync has run. Check back soon.'}
       </p>
     </div>
   )

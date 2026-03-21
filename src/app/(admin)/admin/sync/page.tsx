@@ -1,20 +1,93 @@
 'use client'
 
 import { useState } from 'react'
-import { RefreshCw, Sparkles, BarChart2 } from 'lucide-react'
+import { RefreshCw, Sparkles, BarChart2, Tag } from 'lucide-react'
+import { generateSummariesBatch, seedTopics } from '@/app/actions/admin'
 
 type JobState = 'idle' | 'running' | 'done' | 'error'
+type JobResult = Record<string, unknown>
 
-interface JobResult {
-  message?: string
-  processed?: number
-  failed?: number
-  remaining?: number
-  error?: string
-  [key: string]: unknown
+function JobCard({
+  title,
+  description,
+  icon: Icon,
+  color,
+  onRun,
+}: {
+  title: string
+  description: string
+  icon: React.ElementType
+  color: string
+  onRun: () => Promise<JobResult>
+}) {
+  const [state, setState] = useState<JobState>('idle')
+  const [result, setResult] = useState<JobResult | null>(null)
+
+  async function run() {
+    setState('running')
+    setResult(null)
+    try {
+      const res = await onRun()
+      setResult(res)
+      setState('error' in res && res.error ? 'error' : 'done')
+    } catch (e) {
+      setResult({ error: String(e) })
+      setState('error')
+    }
+  }
+
+  return (
+    <div className="bg-slate-800/80 border border-slate-700 rounded-xl p-6 space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className={`p-2 rounded-lg bg-${color}-500/10`}>
+            <Icon className={`w-5 h-5 text-${color}-400`} />
+          </div>
+          <div>
+            <h2 className="font-semibold text-white">{title}</h2>
+            <p className="text-sm text-slate-400 mt-0.5">{description}</p>
+          </div>
+        </div>
+        <button
+          onClick={run}
+          disabled={state === 'running'}
+          className="shrink-0 text-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+        >
+          {state === 'running' && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+          {state === 'running' ? 'Running…' : 'Run now'}
+        </button>
+      </div>
+
+      {result && (
+        <div
+          className={`text-xs rounded-lg p-3 font-mono whitespace-pre-wrap ${
+            state === 'error'
+              ? 'bg-red-500/10 text-red-400'
+              : 'bg-slate-900/60 text-slate-300'
+          }`}
+        >
+          {JSON.stringify(result, null, 2)}
+        </div>
+      )}
+    </div>
+  )
 }
 
-function useJob(url: string, method = 'POST') {
+function CronJobCard({
+  title,
+  description,
+  icon: Icon,
+  color,
+  url,
+  method,
+}: {
+  title: string
+  description: string
+  icon: React.ElementType
+  color: string
+  url: string
+  method?: string
+}) {
   const [state, setState] = useState<JobState>('idle')
   const [result, setResult] = useState<JobResult | null>(null)
 
@@ -23,7 +96,7 @@ function useJob(url: string, method = 'POST') {
     setResult(null)
     try {
       const res = await fetch(url, {
-        method,
+        method: method ?? 'GET',
         headers: { Authorization: `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET ?? ''}` },
       })
       const json = await res.json()
@@ -35,74 +108,186 @@ function useJob(url: string, method = 'POST') {
     }
   }
 
-  return { state, result, run }
+  return (
+    <div className="bg-slate-800/80 border border-slate-700 rounded-xl p-6 space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className={`p-2 rounded-lg bg-${color}-500/10`}>
+            <Icon className={`w-5 h-5 text-${color}-400`} />
+          </div>
+          <div>
+            <h2 className="font-semibold text-white">{title}</h2>
+            <p className="text-sm text-slate-400 mt-0.5">{description}</p>
+          </div>
+        </div>
+        <button
+          onClick={run}
+          disabled={state === 'running'}
+          className="shrink-0 text-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+        >
+          {state === 'running' && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+          {state === 'running' ? 'Running…' : 'Run now'}
+        </button>
+      </div>
+
+      {result && (
+        <div
+          className={`text-xs rounded-lg p-3 font-mono whitespace-pre-wrap ${
+            state === 'error'
+              ? 'bg-red-500/10 text-red-400'
+              : 'bg-slate-900/60 text-slate-300'
+          }`}
+        >
+          {JSON.stringify(result, null, 2)}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SummariesCard() {
+  const [state, setState] = useState<JobState>('idle')
+  const [log, setLog] = useState<string[]>([])
+  const [autoRun, setAutoRun] = useState(false)
+  const autoRunRef = { current: false }
+
+  async function runOnce(): Promise<number> {
+    const res = await generateSummariesBatch()
+    const remaining = res.remaining ?? 0
+    setLog((prev) => [
+      `✓ processed ${res.processed}, failed ${res.failed}, remaining ${remaining}`,
+      ...prev.slice(0, 19),
+    ])
+    return remaining
+  }
+
+  async function runAll() {
+    setState('running')
+    setLog([])
+    autoRunRef.current = true
+    setAutoRun(true)
+    try {
+      let remaining = Infinity
+      while (autoRunRef.current && remaining > 0) {
+        remaining = await runOnce()
+      }
+      setState('done')
+    } catch (e) {
+      setLog((prev) => [`✗ error: ${String(e)}`, ...prev])
+      setState('error')
+    }
+    setAutoRun(false)
+  }
+
+  function stop() {
+    autoRunRef.current = false
+  }
+
+  return (
+    <div className="bg-slate-800/80 border border-slate-700 rounded-xl p-6 space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-purple-500/10">
+            <Sparkles className="w-5 h-5 text-purple-400" />
+          </div>
+          <div>
+            <h2 className="font-semibold text-white">Generate AI Summaries & Topics</h2>
+            <p className="text-sm text-slate-400 mt-0.5">
+              Generates summaries and assigns topics for 25 bills at a time using Haiku.
+              "Run all" keeps going until every bill is processed.
+            </p>
+          </div>
+        </div>
+        <div className="flex gap-2 shrink-0">
+          {autoRun ? (
+            <button
+              onClick={stop}
+              className="text-sm bg-red-700 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors"
+            >
+              Stop
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={runOnce}
+                disabled={state === 'running'}
+                className="text-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                Run once
+              </button>
+              <button
+                onClick={runAll}
+                disabled={state === 'running'}
+                className="text-sm bg-purple-700 hover:bg-purple-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+              >
+                Run all
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {autoRun && (
+        <div className="flex items-center gap-2 text-sm text-purple-300">
+          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+          Running continuously — click Stop to pause
+        </div>
+      )}
+
+      {log.length > 0 && (
+        <div className="text-xs rounded-lg p-3 font-mono bg-slate-900/60 text-slate-300 space-y-1 max-h-48 overflow-y-auto">
+          {log.map((line, i) => (
+            <div key={i}>{line}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function SyncPage() {
-  const sync = useJob('/api/cron/sync-legislation')
-  const stats = useJob('/api/cron/refresh-stats')
-  const summaries = useJob('/api/admin/generate-summaries')
-
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-white">Data Sync</h1>
 
-      {[
-        {
-          title: 'Sync Legislation',
-          description: 'Pull latest bills and resolutions from the NYC Council Legistar API.',
-          icon: RefreshCw,
-          job: sync,
-          color: 'indigo',
-        },
-        {
-          title: 'Refresh Stats',
-          description: 'Recalculate trending scores, engagement counts, and view totals.',
-          icon: BarChart2,
-          job: stats,
-          color: 'emerald',
-        },
-        {
-          title: 'Generate AI Summaries',
-          description: 'Generate plain-language summaries for legislation that doesn\'t have one yet (batch of 10).',
-          icon: Sparkles,
-          job: summaries,
-          color: 'purple',
-        },
-      ].map(({ title, description, icon: Icon, job, color }) => (
-        <div key={title} className="bg-slate-800/80 border border-slate-700 rounded-xl p-6 space-y-4">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-lg bg-${color}-500/10`}>
-                <Icon className={`w-5 h-5 text-${color}-400`} />
-              </div>
-              <div>
-                <h2 className="font-semibold text-white">{title}</h2>
-                <p className="text-sm text-slate-400 mt-0.5">{description}</p>
-              </div>
-            </div>
-            <button
-              onClick={job.run}
-              disabled={job.state === 'running'}
-              className="shrink-0 text-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
-            >
-              {job.state === 'running' && (
-                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-              )}
-              {job.state === 'running' ? 'Running…' : 'Run now'}
-            </button>
-          </div>
+      <div className="space-y-4">
+        {/* Step 0: Seed topics — run once */}
+        <JobCard
+          title="Seed Topics"
+          description="Create the predefined topic categories (Housing, Transportation, Health, etc.). Run this once before generating summaries."
+          icon={Tag}
+          color="amber"
+          onRun={async () => {
+            const res = await seedTopics()
+            return res as Record<string, unknown>
+          }}
+        />
 
-          {job.result && (
-            <div className={`text-xs rounded-lg p-3 font-mono ${job.state === 'error' ? 'bg-red-500/10 text-red-400' : 'bg-slate-900/60 text-slate-300'}`}>
-              {JSON.stringify(job.result, null, 2)}
-            </div>
-          )}
-        </div>
-      ))}
+        {/* Sync legislation from Legistar */}
+        <CronJobCard
+          title="Sync Legislation"
+          description="Pull latest bills and resolutions from the NYC Council Legistar API."
+          icon={RefreshCw}
+          color="indigo"
+          url="/api/cron/sync-legislation"
+        />
+
+        {/* Refresh stats */}
+        <CronJobCard
+          title="Refresh Stats"
+          description="Recalculate trending scores, engagement counts, and view totals."
+          icon={BarChart2}
+          color="emerald"
+          url="/api/cron/refresh-stats"
+        />
+
+        {/* Generate summaries + topics */}
+        <SummariesCard />
+      </div>
 
       <p className="text-xs text-slate-600">
-        These jobs also run automatically on schedule via Vercel cron. Manual triggers are for testing or catching up after downtime.
+        Sync and Refresh Stats also run automatically on schedule via Vercel cron.
+        Manual triggers are for testing or catching up after downtime.
       </p>
     </div>
   )

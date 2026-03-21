@@ -2,89 +2,75 @@ import Anthropic from '@anthropic-ai/sdk'
 
 const client = new Anthropic()
 
-const LEGISTAR_BASE = 'https://webapi.legistar.com/v1/nyc'
-const LEGISTAR_TOKEN = process.env.LEGISTAR_API_TOKEN
-
 /**
- * Fetches the plain-text bill text from Legistar for a given matter ID.
- * Returns null if unavailable.
+ * Generates a plain-language AI summary and assigns topic slugs using
+ * claude-haiku for cost efficiency. Uses title + official_summary only —
+ * no Legistar bill text fetch needed.
  */
-async function fetchBillText(legistarMatterId: string): Promise<string | null> {
-  if (!LEGISTAR_TOKEN) return null
-  try {
-    const url = `${LEGISTAR_BASE}/matters/${legistarMatterId}/texts?token=${LEGISTAR_TOKEN}`
-    const res = await fetch(url)
-    if (!res.ok) return null
-    const texts = await res.json()
-    if (!Array.isArray(texts) || texts.length === 0) return null
-    // Prefer the most recent version
-    const latest = texts[texts.length - 1]
-    return latest.MatterTextPlain || latest.MatterTextRtf || null
-  } catch {
-    return null
-  }
-}
-
-/**
- * Generates a plain-language AI summary of a piece of legislation.
- * Returns null if the Claude API is not configured or the call fails.
- */
-export async function generateSummary(
+export async function generateSummaryAndTopics(
   title: string,
-  billText: string | null
-): Promise<string | null> {
-  if (!process.env.ANTHROPIC_API_KEY) return null
+  officialSummary: string | null,
+  availableTopics: { name: string; slug: string }[]
+): Promise<{ summary: string | null; topicSlugs: string[]; error?: string }> {
+  if (!process.env.ANTHROPIC_API_KEY) return { summary: null, topicSlugs: [], error: 'ANTHROPIC_API_KEY not set' }
 
-  const content = billText
-    ? `Title: ${title}\n\nBill text:\n${billText.slice(0, 8000)}`
-    : `Title: ${title}\n\n(No full bill text available — summarize based on the title only.)`
+  const content = officialSummary
+    ? `Title: ${title}\n\nOfficial summary: ${officialSummary.slice(0, 1000)}`
+    : `Title: ${title}`
+
+  const topicList = availableTopics.map((t) => `- ${t.name} (slug: ${t.slug})`).join('\n')
 
   try {
     const message = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 300,
       messages: [
         {
           role: 'user',
-          content: `You are summarizing NYC Council legislation for everyday New Yorkers.
+          content: `Summarize this NYC Council legislation for everyday New Yorkers and assign topics.
 
 ${content}
 
-Write a plain-language summary in 2–3 sentences that explains:
-1. What this legislation does
-2. Who it affects
-3. Why it matters
+1. Write a plain-language summary in 2–3 sentences: what it does, who it affects, why it matters. No jargon. Present tense.
 
-Keep it accessible and non-partisan. Do not use jargon or legalese. Write in present tense.`,
+2. Pick 1–3 topics from this list only:
+${topicList}
+
+Respond with valid JSON only:
+{"summary":"...","topic_slugs":["slug-1"]}`,
         },
       ],
     })
 
     const block = message.content[0]
-    return block.type === 'text' ? block.text.trim() : null
-  } catch {
-    return null
+    if (block.type !== 'text') return { summary: null, topicSlugs: [] }
+
+    // Strip markdown code fences if model wrapped the JSON
+    const raw = block.text.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
+
+    const parsed = JSON.parse(raw)
+    const summary = typeof parsed.summary === 'string' ? parsed.summary.trim() : null
+    const topicSlugs = Array.isArray(parsed.topic_slugs)
+      ? parsed.topic_slugs.filter((s: unknown) =>
+          typeof s === 'string' && availableTopics.some((t) => t.slug === s)
+        )
+      : []
+
+    return { summary, topicSlugs }
+  } catch (e) {
+    console.error('[summarize] failed:', e)
+    return { summary: null, topicSlugs: [], error: String(e) }
   }
 }
 
 /**
- * Generates a summary for a legislation record, fetching bill text from Legistar if possible.
- * Pass the legistar_url stored in the legislation table.
+ * Convenience wrapper — signature kept for compatibility.
  */
 export async function summarizeLegislation(
   title: string,
-  legistarUrl: string | null
-): Promise<string | null> {
-  let billText: string | null = null
-
-  if (legistarUrl) {
-    try {
-      const matterId = new URL(legistarUrl).searchParams.get('ID')
-      if (matterId) billText = await fetchBillText(matterId)
-    } catch {
-      // URL parse failed — proceed without bill text
-    }
-  }
-
-  return generateSummary(title, billText)
+  _legistarUrl: string | null,
+  availableTopics: { name: string; slug: string }[] = [],
+  officialSummary?: string | null
+): Promise<{ summary: string | null; topicSlugs: string[]; error?: string }> {
+  return generateSummaryAndTopics(title, officialSummary ?? null, availableTopics)
 }
