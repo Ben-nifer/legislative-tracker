@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import ProfileEditor from './ProfileEditor'
 import InterestTagsEditor from './InterestTagsEditor'
+import AvatarUpload from './AvatarUpload'
 import { Tag } from 'lucide-react'
 
 export default async function ProfilePage() {
@@ -12,7 +13,7 @@ export default async function ProfilePage() {
 
   const { data: profile } = await supabase
     .from('user_profiles')
-    .select('username, display_name, bio, avatar_url')
+    .select('username, display_name, bio, avatar_url, id')
     .eq('id', user.id)
     .maybeSingle()
 
@@ -72,6 +73,15 @@ export default async function ProfilePage() {
               <div className="text-xs text-slate-500 mt-0.5">{stat.label}</div>
             </div>
           ))}
+        </div>
+
+        {/* Avatar */}
+        <div className="flex justify-center">
+          <AvatarUpload
+            userId={profile.id}
+            initialUrl={profile.avatar_url ?? null}
+            displayName={profile.display_name}
+          />
         </div>
 
         {/* Edit form */}

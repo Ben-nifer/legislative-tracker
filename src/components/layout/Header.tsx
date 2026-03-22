@@ -14,11 +14,11 @@ export default async function Header() {
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  let profile: { display_name: string; username: string } | null = null
+  let profile: { display_name: string; username: string; avatar_url: string | null } | null = null
   if (user) {
     const { data } = await supabase
       .from('user_profiles')
-      .select('display_name, username')
+      .select('display_name, username, avatar_url')
       .eq('id', user.id)
       .maybeSingle()
     profile = data
@@ -61,6 +61,7 @@ export default async function Header() {
               <UserMenu
                 displayName={profile.display_name}
                 username={profile.username}
+                avatarUrl={profile.avatar_url ?? null}
               />
             </>
           ) : (

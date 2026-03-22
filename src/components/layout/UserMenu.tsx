@@ -5,13 +5,16 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { User, LogOut, ChevronDown, ExternalLink, Users } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import Avatar from '@/components/profile/Avatar'
 
 export default function UserMenu({
   displayName,
   username,
+  avatarUrl,
 }: {
   displayName: string
   username: string
+  avatarUrl: string | null
 }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -34,22 +37,13 @@ export default function UserMenu({
     router.refresh()
   }
 
-  const initials = displayName
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase()
-
   return (
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(!open)}
         className="flex items-center gap-2 rounded-full border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 transition-colors hover:border-slate-600 hover:bg-slate-700"
       >
-        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-500/30 text-xs font-semibold text-indigo-300">
-          {initials}
-        </span>
+        <Avatar src={avatarUrl} name={displayName} size="sm" />
         <span className="hidden sm:inline">{displayName}</span>
         <ChevronDown size={14} className="text-slate-400" />
       </button>

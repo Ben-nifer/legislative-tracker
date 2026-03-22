@@ -35,6 +35,23 @@ export async function updateProfile(formData: {
   return {}
 }
 
+export async function updateAvatarUrl(url: string): Promise<{ error?: string }> {
+  const supabase = await createServerSupabaseClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Not authenticated' }
+
+  const { error } = await supabase
+    .from('user_profiles')
+    .update({ avatar_url: url })
+    .eq('id', user.id)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/profile')
+  revalidatePath('/users/[username]', 'page')
+  return {}
+}
+
 export async function addInterestTag(tagId: string): Promise<{ error?: string }> {
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()

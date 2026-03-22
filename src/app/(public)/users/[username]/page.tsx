@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { format } from 'date-fns'
 import { ArrowLeft, MessageSquare, Bookmark, Tag } from 'lucide-react'
 import FollowUserButton from '@/components/profile/FollowUserButton'
+import Avatar from '@/components/profile/Avatar'
 
 export const revalidate = 60
 
@@ -30,19 +31,6 @@ function getStatusStyle(status: string) {
   return 'bg-amber-500/20 text-amber-300'
 }
 
-function Initials({ name }: { name: string }) {
-  const initials = name
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase()
-  return (
-    <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-indigo-500/20 text-2xl font-bold text-indigo-300">
-      {initials}
-    </div>
-  )
-}
 
 export default async function UserProfilePage({
   params,
@@ -55,7 +43,7 @@ export default async function UserProfilePage({
 
   const { data: profile } = await supabase
     .from('user_profiles')
-    .select('id, username, display_name, bio, avatar_url')
+    .select('id, username, display_name, bio, avatar_url, id')
     .eq('username', username)
     .maybeSingle()
 
@@ -163,7 +151,7 @@ export default async function UserProfilePage({
       <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8 space-y-8">
         {/* Profile header */}
         <section className="flex items-start gap-5">
-          <Initials name={profile.display_name} />
+          <Avatar src={profile.avatar_url} name={profile.display_name} size="lg" />
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl font-bold text-white">{profile.display_name}</h1>
             <p className="text-slate-500 text-sm mt-0.5">@{profile.username}</p>
