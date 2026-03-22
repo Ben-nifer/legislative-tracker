@@ -66,6 +66,29 @@ export async function setStance(
     await logEngagement(legislationId, 'stance')
   }
 
+  // Recount stances and update legislation_stats immediately so the
+  // tally reflects the change without waiting for the next cron run.
+  const serviceSupabase = createServiceClient()
+  const { data: allStances } = await serviceSupabase
+    .from('user_stances')
+    .select('stance')
+    .eq('legislation_id', legislationId)
+
+  const counts = { support_count: 0, oppose_count: 0, neutral_count: 0, watching_count: 0 }
+  for (const row of allStances ?? []) {
+    if (row.stance === 'support') counts.support_count++
+    else if (row.stance === 'oppose') counts.oppose_count++
+    else if (row.stance === 'neutral') counts.neutral_count++
+    else if (row.stance === 'watching') counts.watching_count++
+  }
+
+  await serviceSupabase
+    .from('legislation_stats')
+    .upsert(
+      { legislation_id: legislationId, ...counts },
+      { onConflict: 'legislation_id' }
+    )
+
   revalidatePath('/legislation')
   revalidatePath('/')
   return {}

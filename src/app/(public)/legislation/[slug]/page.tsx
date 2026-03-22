@@ -3,12 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import ViewLogger from '@/components/legislation/ViewLogger'
 import {
-  ThumbsUp,
-  ThumbsDown,
-  Minus,
-  Eye,
   MessageSquare,
-  Bookmark,
   Calendar,
   User,
   Building2,
@@ -20,6 +15,7 @@ import {
 import { formatDistanceToNow, format } from 'date-fns'
 import { Suspense } from 'react'
 import CommentThread from '@/components/comments/CommentThread'
+import EngagementSection from '@/components/legislation/EngagementSection'
 
 export const revalidate = 300
 
@@ -222,18 +218,27 @@ export default async function LegislationDetailPage({
   const { slug } = await params
   const { sort } = await searchParams
   const commentSort = sort === 'most_engaged' ? 'most_engaged' : 'latest'
-  const legislation = await getLegislation(slug)
 
+  const supabase = await createServerSupabaseClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  const legislation = await getLegislation(slug)
   if (!legislation) notFound()
+
+  let userStance: 'support' | 'oppose' | 'neutral' | 'watching' | null = null
+  if (user) {
+    const { data } = await supabase
+      .from('user_stances')
+      .select('stance')
+      .match({ user_id: user.id, legislation_id: legislation.id })
+      .maybeSingle()
+    userStance = (data?.stance as typeof userStance) ?? null
+  }
 
   const statusStyle = getStatusStyle(legislation.status)
   const summary = legislation.ai_summary ?? legislation.official_summary
   const primarySponsor = legislation.sponsors.find((s) => s.is_primary)
   const coSponsors = legislation.sponsors.filter((s) => !s.is_primary)
-  const total =
-    legislation.stats.support_count +
-    legislation.stats.oppose_count +
-    legislation.stats.neutral_count
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100">
@@ -450,86 +455,12 @@ export default async function LegislationDetailPage({
             <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">
               Public Engagement
             </h2>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <EngagementStat
-                icon={<ThumbsUp size={18} />}
-                count={legislation.stats.support_count}
-                label="Support"
-                color="text-emerald-400"
-                bg="bg-emerald-500/10"
-                border="border-emerald-500/20"
-              />
-              <EngagementStat
-                icon={<ThumbsDown size={18} />}
-                count={legislation.stats.oppose_count}
-                label="Oppose"
-                color="text-red-400"
-                bg="bg-red-500/10"
-                border="border-red-500/20"
-              />
-              <EngagementStat
-                icon={<Minus size={18} />}
-                count={legislation.stats.neutral_count}
-                label="Neutral"
-                color="text-amber-400"
-                bg="bg-amber-500/10"
-                border="border-amber-500/20"
-              />
-              <EngagementStat
-                icon={<Eye size={18} />}
-                count={legislation.stats.watching_count}
-                label="Watching"
-                color="text-blue-400"
-                bg="bg-blue-500/10"
-                border="border-blue-500/20"
-              />
-            </div>
-
-            {/* Stance bar */}
-            {total > 0 && (
-              <div className="mt-4">
-                <div className="mb-1 flex justify-between text-xs text-slate-500">
-                  <span>{Math.round((legislation.stats.support_count / total) * 100)}% support</span>
-                  <span>{total.toLocaleString()} responses</span>
-                </div>
-                <div className="flex h-2 overflow-hidden rounded-full bg-slate-700">
-                  <div
-                    className="bg-emerald-500"
-                    style={{ width: `${(legislation.stats.support_count / total) * 100}%` }}
-                  />
-                  <div
-                    className="bg-amber-500"
-                    style={{ width: `${(legislation.stats.neutral_count / total) * 100}%` }}
-                  />
-                  <div
-                    className="bg-red-500"
-                    style={{ width: `${(legislation.stats.oppose_count / total) * 100}%` }}
-                  />
-                </div>
-                <div className="mt-1 flex gap-4 text-xs text-slate-600">
-                  <span className="flex items-center gap-1">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500" /> Support
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span className="h-2 w-2 rounded-full bg-amber-500" /> Neutral
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <span className="h-2 w-2 rounded-full bg-red-500" /> Oppose
-                  </span>
-                </div>
-              </div>
-            )}
-
-            <div className="mt-4 flex items-center gap-4 border-t border-slate-700/60 pt-4 text-sm text-slate-500">
-              <span className="flex items-center gap-1.5">
-                <MessageSquare size={14} />
-                {legislation.stats.comment_count.toLocaleString()} comments
-              </span>
-              <span className="flex items-center gap-1.5">
-                <Bookmark size={14} />
-                {legislation.stats.bookmark_count.toLocaleString()} saves
-              </span>
-            </div>
+            <EngagementSection
+              legislationId={legislation.id}
+              initialStats={legislation.stats}
+              initialUserStance={userStance}
+              isLoggedIn={!!user}
+            />
           </section>
 
           {/* ── Action history ──────────────────────────────────────── */}
@@ -583,32 +514,3 @@ export default async function LegislationDetailPage({
   )
 }
 
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
-
-function EngagementStat({
-  icon,
-  count,
-  label,
-  color,
-  bg,
-  border,
-}: {
-  icon: React.ReactNode
-  count: number
-  label: string
-  color: string
-  bg: string
-  border: string
-}) {
-  return (
-    <div className={`rounded-lg border p-3 ${bg} ${border}`}>
-      <div className={`mb-1 ${color}`}>{icon}</div>
-      <p className={`text-xl font-bold tabular-nums ${color}`}>
-        {count.toLocaleString()}
-      </p>
-      <p className="text-xs text-slate-500">{label}</p>
-    </div>
-  )
-}
