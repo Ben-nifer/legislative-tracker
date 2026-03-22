@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import UserMenu from './UserMenu'
 import NotificationBell from '@/components/notifications/NotificationBell'
+import MobileNav from './MobileNav'
 import { Scale } from 'lucide-react'
 
 const NAV_LINKS = [
@@ -26,6 +27,9 @@ export default async function Header() {
   return (
     <header className="sticky top-0 z-40 border-b border-slate-800 bg-slate-950/90 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-7xl items-center gap-6 px-4 sm:px-6 lg:px-8">
+        {/* Mobile nav drawer (button visible on mobile only) */}
+        <MobileNav isLoggedIn={!!user} username={profile?.username ?? null} />
+
         {/* Logo */}
         <Link
           href="/"
@@ -36,8 +40,8 @@ export default async function Header() {
           <span className="sm:hidden">NYC Tracker</span>
         </Link>
 
-        {/* Nav */}
-        <nav className="flex items-center gap-1">
+        {/* Nav — desktop only */}
+        <nav className="hidden sm:flex items-center gap-1">
           {NAV_LINKS.map((link) => (
             <Link
               key={link.href}
