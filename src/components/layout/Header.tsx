@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import UserMenu from './UserMenu'
+import NotificationBell from '@/components/notifications/NotificationBell'
 import { Scale } from 'lucide-react'
 
 const NAV_LINKS = [
@@ -51,10 +52,13 @@ export default async function Header() {
         {/* Right side */}
         <div className="ml-auto flex items-center gap-3">
           {user && profile ? (
-            <UserMenu
-              displayName={profile.display_name}
-              username={profile.username}
-            />
+            <>
+              <NotificationBell />
+              <UserMenu
+                displayName={profile.display_name}
+                username={profile.username}
+              />
+            </>
           ) : (
             <Link
               href="/login"
