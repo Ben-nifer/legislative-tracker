@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { User, LogOut, ChevronDown } from 'lucide-react'
+import { User, LogOut, ChevronDown, ExternalLink, Users } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 
 export default function UserMenu({
@@ -59,11 +59,32 @@ export default function UserMenu({
           <p className="px-3 py-2 text-xs text-slate-500">@{username}</p>
           <div className="my-1 border-t border-slate-700" />
           <Link
+            href={`/users/${username}`}
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
+          >
+            <ExternalLink size={14} /> Public Profile
+          </Link>
+          <Link
             href="/profile"
             onClick={() => setOpen(false)}
             className="flex items-center gap-2 px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
           >
-            <User size={14} /> Profile
+            <User size={14} /> Edit Profile
+          </Link>
+          <Link
+            href="/following"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
+          >
+            <Users size={14} /> Following
+          </Link>
+          <Link
+            href="/followers"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
+          >
+            <Users size={14} /> Followers
           </Link>
           <button
             onClick={handleSignOut}

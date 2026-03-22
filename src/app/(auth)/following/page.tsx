@@ -1,14 +1,14 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Users, Tag, FileText, ArrowRight } from 'lucide-react'
+import { Users, Tag, FileText, ArrowRight, UserRound } from 'lucide-react'
 import { format } from 'date-fns'
 
 export const metadata = {
   title: 'Following | NYC Legislative Tracker',
 }
 
-export const revalidate = 60
+export const revalidate = 0
 
 function getStatusStyle(status: string) {
   const s = status.toLowerCase()
@@ -30,6 +30,7 @@ export default async function FollowingPage() {
   const [
     { data: legislatorFollows },
     { data: topicFollows },
+    { data: userFollows },
   ] = await Promise.all([
     supabase
       .from('legislator_follows')
@@ -41,6 +42,11 @@ export default async function FollowingPage() {
       .select('topic_id, topic:topics(id, name, slug)')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false }),
+    supabase
+      .from('user_follows')
+      .select('following_id, profile:user_profiles!user_follows_following_id_fkey(id, username, display_name, bio)')
+      .eq('follower_id', user.id)
+      .order('created_at', { ascending: false }),
   ])
 
   const followedLegislators = (legislatorFollows ?? []).flatMap((f) => {
@@ -51,6 +57,11 @@ export default async function FollowingPage() {
   const followedTopics = (topicFollows ?? []).flatMap((f) => {
     const topic = Array.isArray(f.topic) ? f.topic[0] : f.topic
     return topic ? [topic] : []
+  })
+
+  const followedUsers = (userFollows ?? []).flatMap((f) => {
+    const profile = Array.isArray(f.profile) ? f.profile[0] : f.profile
+    return profile ? [profile] : []
   })
 
   // Feed: recent legislation from followed legislators
@@ -84,7 +95,51 @@ export default async function FollowingPage() {
     <main className="min-h-screen bg-slate-950 text-slate-100">
       <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8 space-y-10">
 
-        <h1 className="text-2xl font-bold text-white">Following</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-white">Following</h1>
+          <Link href="/followers" className="text-sm text-indigo-400 hover:underline">
+            View followers
+          </Link>
+        </div>
+
+        {/* ── Followed Users ─────────────────────────────────────────── */}
+        <section>
+          <div className="mb-4 flex items-center gap-2">
+            <UserRound size={16} className="text-pink-400" />
+            <h2 className="font-semibold text-slate-200">
+              Users
+              {followedUsers.length > 0 && (
+                <span className="ml-2 rounded-full bg-slate-700 px-2 py-0.5 text-xs text-slate-300">
+                  {followedUsers.length}
+                </span>
+              )}
+            </h2>
+          </div>
+
+          {followedUsers.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-700 p-8 text-center">
+              <p className="text-sm text-slate-500">You&apos;re not following any users yet.</p>
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {followedUsers.map((u) => (
+                <Link
+                  key={u.id}
+                  href={`/users/${u.username}`}
+                  className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/60 p-4 transition-colors hover:border-slate-700"
+                >
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-pink-500/20 text-sm font-bold text-pink-300">
+                    {u.display_name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-slate-100">{u.display_name}</p>
+                    <p className="truncate text-xs text-slate-500">@{u.username}</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
 
         {/* ── Followed Council Members ──────────────────────────────── */}
         <section>
