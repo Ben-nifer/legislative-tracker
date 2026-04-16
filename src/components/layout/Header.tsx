@@ -5,9 +5,13 @@ import NotificationBell from '@/components/notifications/NotificationBell'
 import MobileNav from './MobileNav'
 import { Scale } from 'lucide-react'
 
-const NAV_LINKS = [
+const PUBLIC_NAV_LINKS = [
   { href: '/legislation', label: 'Legislation' },
   { href: '/council-members', label: 'Council Members' },
+]
+
+const AUTH_NAV_LINKS = [
+  { href: '/following', label: 'Following' },
 ]
 
 export default async function Header() {
@@ -23,6 +27,8 @@ export default async function Header() {
       .maybeSingle()
     profile = data
   }
+
+  const navLinks = user ? [...PUBLIC_NAV_LINKS, ...AUTH_NAV_LINKS] : PUBLIC_NAV_LINKS
 
   return (
     <header className="sticky top-0 z-40 border-b border-slate-800 bg-slate-950/90 backdrop-blur">
@@ -42,7 +48,7 @@ export default async function Header() {
 
         {/* Nav — desktop only */}
         <nav className="hidden sm:flex items-center gap-1">
-          {NAV_LINKS.map((link) => (
+          {navLinks.map((link) => (
             <Link
               key={link.href}
               href={link.href}

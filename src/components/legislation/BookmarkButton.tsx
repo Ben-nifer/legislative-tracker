@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Bookmark } from 'lucide-react'
-import { toggleBookmark } from '@/app/actions/engagement'
+import { followLegislation, unfollowLegislation } from '@/app/actions/social'
 
 export default function BookmarkButton({
   legislationId,
@@ -23,13 +23,13 @@ export default function BookmarkButton({
     setBookmarked(!prev) // optimistic
 
     setPending(true)
-    const result = await toggleBookmark(legislationId)
+    const result = prev
+      ? await unfollowLegislation(legislationId)
+      : await followLegislation(legislationId)
     setPending(false)
 
     if (result.error) {
       setBookmarked(prev) // revert on error
-    } else {
-      setBookmarked(result.bookmarked)
     }
   }
 

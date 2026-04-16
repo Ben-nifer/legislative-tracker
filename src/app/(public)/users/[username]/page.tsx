@@ -98,7 +98,7 @@ export default async function UserProfilePage({
       .eq('user_id', profile.id)
       .eq('stance', 'neutral'),
     supabase
-      .from('bookmarks')
+      .from('legislation_follows')
       .select('legislation(id, slug, file_number, title, status)')
       .eq('user_id', profile.id)
       .order('created_at', { ascending: false })
@@ -219,11 +219,11 @@ export default async function UserProfilePage({
           </div>
         </section>
 
-        {/* Saved legislation */}
+        {/* Following legislation */}
         <section>
           <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
             <Bookmark size={14} />
-            Saved Legislation
+            Following
             {bookmarks.length > 0 && (
               <span className="rounded-full bg-slate-700 px-2 py-0.5 text-xs normal-case text-slate-300">
                 {bookmarks.length}
@@ -231,7 +231,7 @@ export default async function UserProfilePage({
             )}
           </h2>
           {bookmarks.length === 0 ? (
-            <p className="text-sm italic text-slate-600">No saved legislation.</p>
+            <p className="text-sm italic text-slate-600">Not following any legislation.</p>
           ) : (
             <div className="space-y-3">
               {bookmarks.map((item) => (

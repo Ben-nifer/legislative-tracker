@@ -32,8 +32,7 @@ export async function addComment(
     .eq('legislation_id', legislationId)
     .maybeSingle()
 
-  const stanceContext =
-    stanceRow?.stance === 'watching' ? null : (stanceRow?.stance ?? null)
+  const stanceContext = stanceRow?.stance ?? null
 
   const { error } = await supabase.from('comments').insert({
     user_id: user.id,

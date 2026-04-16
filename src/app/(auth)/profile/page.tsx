@@ -31,7 +31,7 @@ export default async function ProfilePage() {
     supabase.from('user_stances').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('stance', 'support'),
     supabase.from('user_stances').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('stance', 'oppose'),
     supabase.from('user_stances').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('stance', 'neutral'),
-    supabase.from('bookmarks').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
+    supabase.from('legislation_follows').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
     supabase.from('interest_tags').select('id, name, slug, is_predefined').eq('is_predefined', true).order('name'),
     supabase
       .from('user_interest_tags')
@@ -61,7 +61,7 @@ export default async function ProfilePage() {
             { label: 'Supporting', value: supportCount ?? 0, color: 'text-emerald-400' },
             { label: 'Opposing', value: opposeCount ?? 0, color: 'text-red-400' },
             { label: 'Neutral', value: neutralCount ?? 0, color: 'text-amber-400' },
-            { label: 'Saved', value: bookmarkCount ?? 0, color: 'text-indigo-400' },
+            { label: 'Following', value: bookmarkCount ?? 0, color: 'text-blue-400' },
           ].map((stat) => (
             <div
               key={stat.label}

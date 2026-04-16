@@ -24,7 +24,7 @@ export default function WatchButton({
         className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-300 transition-colors hover:border-slate-600 hover:text-slate-100"
       >
         <Bell size={14} />
-        Watch
+        Follow
       </Link>
     )
   }
@@ -53,7 +53,7 @@ export default function WatchButton({
       ].join(' ')}
     >
       {following ? <BellOff size={14} /> : <Bell size={14} />}
-      {following ? 'Watching' : 'Watch'}
+      {following ? 'Following' : 'Follow'}
     </button>
   )
 }

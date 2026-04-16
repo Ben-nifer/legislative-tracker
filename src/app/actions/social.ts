@@ -116,6 +116,8 @@ export async function followLegislation(
   await updateWatchingCount(legislationId)
 
   revalidatePath('/following')
+  revalidatePath('/legislation')
+  revalidatePath('/')
   return {}
 }
 
@@ -137,6 +139,8 @@ export async function unfollowLegislation(
   await updateWatchingCount(legislationId)
 
   revalidatePath('/following')
+  revalidatePath('/legislation')
+  revalidatePath('/')
   return {}
 }
 

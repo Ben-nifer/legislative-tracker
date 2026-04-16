@@ -1,5 +1,6 @@
 'use server'
 
+import Anthropic from '@anthropic-ai/sdk'
 import { createServerSupabaseClient, createServiceClient } from '@/lib/supabase/server'
 import { summarizeLegislation } from '@/lib/ai/summarize'
 import { syncSponsorships } from '@/lib/legistar/sync'
@@ -197,4 +198,72 @@ export async function generateSummariesBatch(): Promise<{
     .not('type', 'is', null)
 
   return { processed, failed, remaining: remaining ?? 0, ...(firstError ? { error: firstError } : {}) }
+}
+
+/**
+ * Generates short summaries (5–10 words) for 25 legislation items at a time.
+ */
+export async function generateShortSummaries(): Promise<{
+  processed: number
+  total: number
+  done: boolean
+  error?: string
+}> {
+  try {
+    await assertAdmin()
+  } catch (e) {
+    return { processed: 0, total: 0, done: true, error: String(e) }
+  }
+
+  const supabase = createServiceClient()
+
+  const { data: batch, error } = await supabase
+    .from('legislation')
+    .select('id, ai_summary')
+    .is('short_summary', null)
+    .not('ai_summary', 'is', null)
+    .neq('ai_summary', '')
+    .eq('type', 'introduction')
+    .limit(25)
+
+  if (error) return { processed: 0, total: 0, done: true, error: error.message }
+  if (!batch || batch.length === 0) return { processed: 0, total: 0, done: true }
+
+  const { count: totalRemaining } = await supabase
+    .from('legislation')
+    .select('*', { count: 'exact', head: true })
+    .is('short_summary', null)
+    .not('ai_summary', 'is', null)
+    .neq('ai_summary', '')
+    .eq('type', 'introduction')
+
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  let processed = 0
+
+  await Promise.all(
+    batch.map(async (item) => {
+      try {
+        const message = await anthropic.messages.create({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 64,
+          messages: [
+            {
+              role: 'user',
+              content: `Summarize this legislation in 5-10 words using plain language. Return only the summary, no punctuation at the end: ${item.ai_summary}`,
+            },
+          ],
+        })
+        const text = message.content[0].type === 'text' ? message.content[0].text.trim() : null
+        if (text) {
+          await supabase.from('legislation').update({ short_summary: text }).eq('id', item.id)
+          processed++
+        }
+      } catch {
+        // skip failed items
+      }
+    })
+  )
+
+  const remaining = (totalRemaining ?? 0) - processed
+  return { processed, total: totalRemaining ?? 0, done: remaining <= 0 }
 }

@@ -12,7 +12,6 @@ const NAV_LINKS = [
 
 const AUTH_LINKS = [
   { href: '/following', label: 'Following' },
-  { href: '/bookmarks', label: 'Bookmarks' },
   { href: '/notifications', label: 'Notifications' },
   { href: '/settings', label: 'Settings' },
 ]

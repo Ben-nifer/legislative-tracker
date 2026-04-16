@@ -225,7 +225,7 @@ export default async function LegislationDetailPage({
   const legislation = await getLegislation(slug)
   if (!legislation) notFound()
 
-  let userStance: 'support' | 'oppose' | 'neutral' | 'watching' | null = null
+  let userStance: 'support' | 'oppose' | 'neutral' | null = null
   let isFollowing = false
   if (user) {
     const [stanceResult, followResult] = await Promise.all([

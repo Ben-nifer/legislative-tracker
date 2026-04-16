@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ThumbsUp, ThumbsDown, Minus, Eye } from 'lucide-react'
+import { ThumbsUp, ThumbsDown, Minus } from 'lucide-react'
 import { setStance, type Stance } from '@/app/actions/engagement'
 
 type Stats = {
@@ -52,16 +52,6 @@ const STANCES: StanceConfig[] = [
     countKey: 'neutral_count',
     showCount: true,
     tooltip: "I've reviewed this and have no strong opinion",
-  },
-  {
-    value: 'watching',
-    label: 'Watching',
-    shortLabel: 'Watch',
-    icon: <Eye size={14} />,
-    activeClasses: 'bg-blue-500/20 border-blue-500/60 text-blue-300',
-    countKey: 'support_count', // unused — watching has no count display
-    showCount: false,
-    tooltip: "I'm tracking this but haven't decided yet",
   },
 ]
 
@@ -170,21 +160,15 @@ function applyStanceChange(
   }
 
   // Decrement old stance count
-  if (prev && prev !== 'watching') {
-    const key = countKey[prev as 'support' | 'oppose' | 'neutral']
+  if (prev) {
+    const key = countKey[prev]
     delta[key] = Math.max(0, stats[key] - 1)
-  }
-  if (prev === 'watching') {
-    delta.watching_count = Math.max(0, stats.watching_count - 1)
   }
 
   // Increment new stance count
-  if (next && next !== 'watching') {
-    const key = countKey[next as 'support' | 'oppose' | 'neutral']
+  if (next) {
+    const key = countKey[next]
     delta[key] = (delta[key] ?? stats[key]) + 1
-  }
-  if (next === 'watching') {
-    delta.watching_count = (delta.watching_count ?? stats.watching_count) + 1
   }
 
   return { ...stats, ...delta }

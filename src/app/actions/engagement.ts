@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createServerSupabaseClient, createServiceClient } from '@/lib/supabase/server'
 
-export type Stance = 'support' | 'oppose' | 'neutral' | 'watching'
+export type Stance = 'support' | 'oppose' | 'neutral'
 
 /**
  * Log an engagement event for trending calculations.
@@ -74,12 +74,11 @@ export async function setStance(
     .select('stance')
     .eq('legislation_id', legislationId)
 
-  const counts = { support_count: 0, oppose_count: 0, neutral_count: 0, watching_count: 0 }
+  const counts = { support_count: 0, oppose_count: 0, neutral_count: 0 }
   for (const row of allStances ?? []) {
     if (row.stance === 'support') counts.support_count++
     else if (row.stance === 'oppose') counts.oppose_count++
     else if (row.stance === 'neutral') counts.neutral_count++
-    else if (row.stance === 'watching') counts.watching_count++
   }
 
   await serviceSupabase
@@ -94,49 +93,3 @@ export async function setStance(
   return {}
 }
 
-/**
- * Toggle a bookmark on a piece of legislation.
- * Returns the new bookmarked state.
- */
-export async function toggleBookmark(
-  legislationId: string
-): Promise<{ bookmarked: boolean; error?: string }> {
-  const supabase = await createServerSupabaseClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) return { bookmarked: false, error: 'Not authenticated' }
-
-  // Check if already bookmarked
-  const { data: existing } = await supabase
-    .from('bookmarks')
-    .select('legislation_id')
-    .match({ user_id: user.id, legislation_id: legislationId })
-    .maybeSingle()
-
-  if (existing) {
-    const { error } = await supabase
-      .from('bookmarks')
-      .delete()
-      .match({ user_id: user.id, legislation_id: legislationId })
-
-    if (error) return { bookmarked: true, error: error.message }
-
-    revalidatePath('/legislation')
-    revalidatePath('/')
-    return { bookmarked: false }
-  } else {
-    const { error } = await supabase.from('bookmarks').insert({
-      user_id: user.id,
-      legislation_id: legislationId,
-    })
-
-    if (error) return { bookmarked: false, error: error.message }
-
-    await logEngagement(legislationId, 'bookmark')
-    revalidatePath('/legislation')
-    revalidatePath('/')
-    return { bookmarked: true }
-  }
-}

@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { RefreshCw, Sparkles, BarChart2, Tag, Users } from 'lucide-react'
-import { generateSummariesBatch, seedTopics, runSyncSponsorships } from '@/app/actions/admin'
+import { RefreshCw, Sparkles, BarChart2, Tag, Users, FileText } from 'lucide-react'
+import { generateSummariesBatch, generateShortSummaries, seedTopics, runSyncSponsorships } from '@/app/actions/admin'
 
 function SponsorshipsCard() {
   const [state, setState] = useState<JobState>('idle')
@@ -347,6 +347,104 @@ function SummariesCard() {
   )
 }
 
+function ShortSummariesCard() {
+  const [state, setState] = useState<JobState>('idle')
+  const [log, setLog] = useState<string[]>([])
+  const [autoRun, setAutoRun] = useState(false)
+  const autoRunRef = { current: false }
+
+  async function runOnce(): Promise<boolean> {
+    const res = await generateShortSummaries()
+    setLog((prev) => [
+      `✓ processed ${res.processed} of ~${res.total} remaining${res.error ? ` — ${res.error}` : ''}`,
+      ...prev.slice(0, 19),
+    ])
+    return res.done
+  }
+
+  async function runAll() {
+    setState('running')
+    setLog([])
+    autoRunRef.current = true
+    setAutoRun(true)
+    try {
+      let done = false
+      while (autoRunRef.current && !done) {
+        done = await runOnce()
+      }
+      setState('done')
+    } catch (e) {
+      setLog((prev) => [`✗ error: ${String(e)}`, ...prev])
+      setState('error')
+    }
+    setAutoRun(false)
+  }
+
+  function stop() {
+    autoRunRef.current = false
+  }
+
+  return (
+    <div className="bg-slate-800/80 border border-slate-700 rounded-xl p-6 space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-sky-500/10">
+            <FileText className="w-5 h-5 text-sky-400" />
+          </div>
+          <div>
+            <h2 className="font-semibold text-white">Generate Short Summaries</h2>
+            <p className="text-sm text-slate-400 mt-0.5">
+              Creates 5–10 word plain-language titles for legislation cards. Processes 25 bills per batch.
+            </p>
+          </div>
+        </div>
+        <div className="flex gap-2 shrink-0">
+          {autoRun ? (
+            <button
+              onClick={stop}
+              className="text-sm bg-red-700 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors"
+            >
+              Stop
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={runOnce}
+                disabled={state === 'running'}
+                className="text-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                Run once
+              </button>
+              <button
+                onClick={runAll}
+                disabled={state === 'running'}
+                className="text-sm bg-sky-700 hover:bg-sky-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+              >
+                Run all
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {autoRun && (
+        <div className="flex items-center gap-2 text-sm text-sky-300">
+          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+          Running continuously — click Stop to pause
+        </div>
+      )}
+
+      {log.length > 0 && (
+        <div className="text-xs rounded-lg p-3 font-mono bg-slate-900/60 text-slate-300 space-y-1 max-h-48 overflow-y-auto">
+          {log.map((line, i) => (
+            <div key={i}>{line}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function SyncPage() {
   return (
     <div className="space-y-6">
@@ -388,6 +486,9 @@ export default function SyncPage() {
 
         {/* Generate summaries + topics */}
         <SummariesCard />
+
+        {/* Generate short summaries for cards */}
+        <ShortSummariesCard />
       </div>
 
       <p className="text-xs text-slate-600">

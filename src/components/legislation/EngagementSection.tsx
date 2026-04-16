@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ThumbsUp, ThumbsDown, Minus, Eye, MessageSquare, Bookmark } from 'lucide-react'
+import { ThumbsUp, ThumbsDown, Minus, Bell, Users, MessageSquare } from 'lucide-react'
 import { setStance, type Stance } from '@/app/actions/engagement'
 import { followLegislation, unfollowLegislation } from '@/app/actions/social'
 
@@ -64,8 +64,8 @@ function applyStanceChange(stats: Stats, prev: Stance | null, next: Stance | nul
     : s === 'oppose' ? 'oppose_count'
     : 'neutral_count'
 
-  if (prev && prev !== 'watching') updated[key(prev)] = Math.max(0, updated[key(prev)] as number - 1)
-  if (next && next !== 'watching') updated[key(next)] = (updated[key(next)] as number) + 1
+  if (prev) updated[key(prev)] = Math.max(0, updated[key(prev)] as number - 1)
+  if (next) updated[key(next)] = (updated[key(next)] as number) + 1
   return updated
 }
 
@@ -83,12 +83,10 @@ export default function EngagementSection({
   isLoggedIn: boolean
 }) {
   const [stats, setStats] = useState<Stats>(initialStats)
-  // Only support/oppose/neutral are tracked here — watching is separate
-  const effectiveStance = initialUserStance === 'watching' ? null : initialUserStance
-  const [currentStance, setCurrentStance] = useState<Stance | null>(effectiveStance)
-  const [isWatching, setIsWatching] = useState(initialWatching)
+  const [currentStance, setCurrentStance] = useState<Stance | null>(initialUserStance)
+  const [isFollowing, setIsFollowing] = useState(initialWatching)
   const [pending, setPending] = useState(false)
-  const [watchPending, setWatchPending] = useState(false)
+  const [followPending, setFollowPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   async function handleStance(stance: Stance) {
@@ -113,26 +111,26 @@ export default function EngagementSection({
     }
   }
 
-  async function handleWatch() {
-    if (!isLoggedIn || watchPending) return
+  async function handleFollow() {
+    if (!isLoggedIn || followPending) return
     setError(null)
 
-    const prev = isWatching
+    const prev = isFollowing
     const prevStats = stats
-    setIsWatching(!prev)
+    setIsFollowing(!prev)
     setStats((s) => ({
       ...s,
       watching_count: prev ? Math.max(0, s.watching_count - 1) : s.watching_count + 1,
     }))
 
-    setWatchPending(true)
+    setFollowPending(true)
     const result = prev
       ? await unfollowLegislation(legislationId)
       : await followLegislation(legislationId)
-    setWatchPending(false)
+    setFollowPending(false)
 
     if (result.error) {
-      setIsWatching(prev)
+      setIsFollowing(prev)
       setStats(prevStats)
       setError(result.error)
     }
@@ -173,23 +171,30 @@ export default function EngagementSection({
           {/* Divider */}
           <span className="mx-1 h-4 w-px bg-slate-700" />
 
-          {/* Watching — independent toggle */}
+          {/* Follow — independent toggle */}
           <button
-            onClick={handleWatch}
-            disabled={!isLoggedIn || watchPending}
-            title={isLoggedIn ? "Watch for updates" : 'Sign in to watch'}
-            aria-pressed={isWatching}
+            onClick={handleFollow}
+            disabled={!isLoggedIn || followPending}
+            title={isLoggedIn ? (isFollowing ? 'Unfollow this bill' : 'Follow for updates') : 'Sign in to follow'}
+            aria-pressed={isFollowing}
             className={[
-              'flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all duration-150',
-              !isLoggedIn || watchPending
+              'group flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all duration-150',
+              !isLoggedIn || followPending
                 ? DISABLED
-                : isWatching
+                : isFollowing
                 ? 'bg-blue-500/20 border-blue-500/60 text-blue-300'
                 : INACTIVE,
             ].join(' ')}
           >
-            <Eye size={14} />
-            <span>Watching</span>
+            <Bell size={14} />
+            {isFollowing ? (
+              <>
+                <span className="group-hover:hidden">Following</span>
+                <span className="hidden group-hover:inline">Unfollow</span>
+              </>
+            ) : (
+              <span>Follow</span>
+            )}
             <span className="tabular-nums opacity-80">
               {stats.watching_count.toLocaleString()}
             </span>
@@ -218,13 +223,13 @@ export default function EngagementSection({
             <p className="text-xs text-slate-500">{s.label}</p>
           </div>
         ))}
-        {/* Watching tally */}
+        {/* Following tally */}
         <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 p-3">
-          <div className="mb-1 text-blue-400"><Eye size={18} /></div>
+          <div className="mb-1 text-blue-400"><Users size={18} /></div>
           <p className="text-xl font-bold tabular-nums text-blue-400">
             {stats.watching_count.toLocaleString()}
           </p>
-          <p className="text-xs text-slate-500">Watching</p>
+          <p className="text-xs text-slate-500">Following</p>
         </div>
       </div>
 
@@ -248,15 +253,11 @@ export default function EngagementSection({
         </div>
       )}
 
-      {/* ── Comment / bookmark counts ─────────────── */}
+      {/* ── Comment count ─────────────────────────── */}
       <div className="flex items-center gap-4 border-t border-slate-700/60 pt-4 text-sm text-slate-500">
         <span className="flex items-center gap-1.5">
           <MessageSquare size={14} />
           {stats.comment_count.toLocaleString()} comments
-        </span>
-        <span className="flex items-center gap-1.5">
-          <Bookmark size={14} />
-          {stats.bookmark_count.toLocaleString()} saves
         </span>
       </div>
     </div>

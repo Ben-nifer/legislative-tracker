@@ -262,9 +262,9 @@ export default async function FollowingPage() {
 
           {followedLegislation.length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-700 p-8 text-center">
-              <p className="text-sm text-slate-500">You&apos;re not watching any legislation yet.</p>
+              <p className="text-sm text-slate-500">You aren&apos;t following any bills yet.</p>
               <Link href="/legislation" className="mt-2 inline-flex items-center gap-1 text-sm text-indigo-400 hover:underline">
-                Browse legislation <ArrowRight size={13} />
+                Browse legislation to find bills to follow <ArrowRight size={13} />
               </Link>
             </div>
           ) : (
