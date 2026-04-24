@@ -57,7 +57,7 @@ export default function UserMenu({
             onClick={() => setOpen(false)}
             className="flex items-center gap-2 px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
           >
-            <ExternalLink size={14} /> Public Profile
+            <ExternalLink size={14} /> Profile
           </Link>
           <Link
             href="/profile"

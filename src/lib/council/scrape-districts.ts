@@ -30,10 +30,15 @@ function lastNameKey(name: string): string {
 // ── HTML parsing ────────────────────────────────────────────────────────────
 
 function parseMemberName(html: string): string | null {
-  // <title>District N - Firstname Lastname</title>
-  const match = html.match(/<title>District \d+\s*[-–]\s*([^<]+)<\/title>/)
-  if (!match) return null
-  return match[1].trim()
+  // Standard format: <title>District N - Firstname Lastname</title>
+  const match1 = html.match(/<title>District \d+\s*[-–]\s*([^<]+)<\/title>/)
+  if (match1) return match1[1].trim()
+
+  // Speaker/redirect format: <title>Home - Firstname Lastname</title>
+  const match2 = html.match(/<title>Home\s*[-–]\s*([^<]+)<\/title>/)
+  if (match2) return match2[1].trim()
+
+  return null
 }
 
 function parseNeighborhoods(html: string): string[] {

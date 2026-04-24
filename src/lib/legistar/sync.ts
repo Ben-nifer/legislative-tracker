@@ -82,7 +82,7 @@ export async function syncCouncilMembers(): Promise<number> {
     const slug = toSlug(person.PersonFullName)
     const district = districtBySlug.get(slug)
     const photo_url = district != null
-      ? `https://raw.githubusercontent.com/NewYorkCityCouncil/districts/master/thumbnails/district-${String(district).padStart(2, '0')}.jpg`
+      ? `https://raw.githubusercontent.com/NewYorkCityCouncil/districts/master/thumbnails/district-${district}.jpg`
       : (person.PersonPhotoFileName
           ? `https://legistar.council.nyc.gov/Photos/${person.PersonPhotoFileName}`
           : null)
