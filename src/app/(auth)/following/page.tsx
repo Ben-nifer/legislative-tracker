@@ -1,9 +1,9 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Users, Tag, FileText, ArrowRight, UserRound, Bell } from 'lucide-react'
+import { Users, Tag, FileText, ArrowRight, UserRound, Bell, CalendarDays } from 'lucide-react'
 import { format } from 'date-fns'
-import LegislationFollowRow from '@/components/following/LegislationFollowRow'
+import LegislationCard, { type LegislationCardData } from '@/components/legislation/LegislationCard'
 
 export const metadata = {
   title: 'Following | NYC Legislative Tracker',
@@ -56,11 +56,28 @@ export default async function FollowingPage() {
         notify_updates,
         notify_hearings,
         notify_amendments,
-        legislation:legislation(id, file_number, slug, title, status)
+        legislation:legislation(
+          id, file_number, slug, title, short_summary, status, type,
+          intro_date, last_action_date, ai_summary, official_summary,
+          legislation_stats(support_count, oppose_count, neutral_count, watching_count, comment_count, bookmark_count),
+          sponsorships!left(is_primary, legislator:legislators(full_name, slug))
+        )
       `)
       .eq('user_id', user.id)
       .order('created_at', { ascending: false }),
   ])
+
+  // Fetch upcoming events for followed legislation
+  const followedLegislationIds = (legislationFollows ?? []).map((f) => f.legislation_id)
+  const { data: upcomingEvents } = followedLegislationIds.length > 0
+    ? await supabase
+        .from('events')
+        .select('id, event_date, event_type, location, legislation_id, legislation:legislation(file_number, slug, title, short_summary)')
+        .in('legislation_id', followedLegislationIds)
+        .gte('event_date', new Date().toISOString())
+        .order('event_date', { ascending: true })
+        .limit(20)
+    : { data: [] }
 
   const followedLegislators = (legislatorFollows ?? []).flatMap((f) => {
     const leg = Array.isArray(f.legislator) ? f.legislator[0] : f.legislator
@@ -72,16 +89,52 @@ export default async function FollowingPage() {
     return topic ? [topic] : []
   })
 
-  const followedLegislation = (legislationFollows ?? []).flatMap((f) => {
+  const followedLegislation: LegislationCardData[] = (legislationFollows ?? []).flatMap((f) => {
     const leg = Array.isArray(f.legislation) ? f.legislation[0] : f.legislation
     if (!leg) return []
+    const stats = Array.isArray((leg as any).legislation_stats)
+      ? (leg as any).legislation_stats[0]
+      : (leg as any).legislation_stats
+    const sponsorships: { is_primary: boolean; legislator: { full_name: string; slug: string } | null }[] =
+      (leg as any).sponsorships ?? []
+    const primarySponsor = sponsorships.find((s) => s.is_primary)?.legislator
     return [{
-      ...leg,
-      notify_updates: f.notify_updates ?? true,
-      notify_hearings: f.notify_hearings ?? true,
-      notify_amendments: f.notify_amendments ?? true,
+      id: leg.id,
+      file_number: leg.file_number,
+      slug: leg.slug,
+      title: leg.title,
+      short_summary: (leg as any).short_summary ?? null,
+      status: leg.status,
+      type: (leg as any).type ?? 'introduction',
+      intro_date: (leg as any).intro_date ?? null,
+      last_action_date: (leg as any).last_action_date ?? null,
+      ai_summary: (leg as any).ai_summary ?? null,
+      official_summary: (leg as any).official_summary ?? null,
+      stats: stats ?? null,
+      primary_sponsor: primarySponsor?.full_name ?? null,
+      primary_sponsor_slug: primarySponsor?.slug ?? null,
     }]
   })
+
+  // Group upcoming events by date
+  type UpcomingEvent = {
+    id: string
+    event_date: string
+    event_type: string | null
+    location: string | null
+    legislation_id: string
+    legislation: { file_number: string; slug: string; title: string; short_summary: string | null } | null
+  }
+
+  const eventsByDate = new Map<string, UpcomingEvent[]>()
+  for (const ev of (upcomingEvents ?? []) as unknown as UpcomingEvent[]) {
+    if (!ev.event_date) continue
+    const leg = Array.isArray(ev.legislation) ? ev.legislation[0] : ev.legislation
+    const dateKey = format(new Date(ev.event_date), 'yyyy-MM-dd')
+    if (!eventsByDate.has(dateKey)) eventsByDate.set(dateKey, [])
+    eventsByDate.get(dateKey)!.push({ ...ev, legislation: leg ?? null })
+  }
+  const sortedDates = [...eventsByDate.keys()].sort()
 
   const followedUsers = (userFollows ?? []).flatMap((f) => {
     const profile = Array.isArray(f.profile) ? f.profile[0] : f.profile
@@ -125,6 +178,70 @@ export default async function FollowingPage() {
             View followers
           </Link>
         </div>
+
+        {/* ── Upcoming ──────────────────────────────────────────────── */}
+        <section>
+          <div className="mb-4 flex items-center gap-2">
+            <CalendarDays size={16} className="text-blue-400" />
+            <h2 className="font-semibold text-slate-200">Upcoming</h2>
+          </div>
+
+          {sortedDates.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-700 p-8 text-center">
+              <p className="text-sm text-slate-500">No upcoming hearings or votes for bills you follow.</p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {sortedDates.map((dateKey) => {
+                const events = eventsByDate.get(dateKey)!
+                return (
+                  <div key={dateKey}>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      {format(new Date(dateKey + 'T12:00:00'), 'EEEE, MMMM d')}
+                    </p>
+                    <div className="space-y-2">
+                      {events.map((ev) => {
+                        const isVote = ev.event_type?.toLowerCase().includes('vote')
+                        return (
+                          <div
+                            key={ev.id}
+                            className="flex items-start gap-3 rounded-xl border border-slate-800 bg-slate-900/60 p-4"
+                          >
+                            <span className={[
+                              'mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-xs font-medium',
+                              isVote
+                                ? 'bg-amber-500/20 text-amber-300'
+                                : 'bg-blue-500/20 text-blue-300',
+                            ].join(' ')}>
+                              {ev.event_type ?? 'Hearing'}
+                            </span>
+                            <div className="min-w-0">
+                              {ev.legislation ? (
+                                <Link
+                                  href={`/legislation/${ev.legislation.slug}`}
+                                  className="text-sm font-medium text-slate-200 hover:text-white hover:underline"
+                                >
+                                  <span className="font-mono text-xs text-slate-500 mr-1.5">
+                                    {ev.legislation.file_number}
+                                  </span>
+                                  {ev.legislation.short_summary ?? ev.legislation.title}
+                                </Link>
+                              ) : null}
+                              <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
+                                <span>{format(new Date(ev.event_date), 'h:mm a')}</span>
+                                {ev.location && <span>· {ev.location}</span>}
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </section>
 
         {/* ── Followed Users ─────────────────────────────────────────── */}
         <section>
@@ -246,12 +363,12 @@ export default async function FollowingPage() {
           )}
         </section>
 
-        {/* ── Followed Legislation ─────────────────────────────────── */}
+        {/* ── Bills You Follow ─────────────────────────────────────── */}
         <section>
           <div className="mb-4 flex items-center gap-2">
             <Bell size={16} className="text-emerald-400" />
             <h2 className="font-semibold text-slate-200">
-              Legislation
+              Bills You Follow
               {followedLegislation.length > 0 && (
                 <span className="ml-2 rounded-full bg-slate-700 px-2 py-0.5 text-xs text-slate-300">
                   {followedLegislation.length}
@@ -268,18 +385,12 @@ export default async function FollowingPage() {
               </Link>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {followedLegislation.map((leg) => (
-                <LegislationFollowRow
+                <LegislationCard
                   key={leg.id}
-                  legislationId={leg.id}
-                  slug={leg.slug}
-                  file_number={leg.file_number}
-                  title={leg.title}
-                  status={leg.status}
-                  notifyUpdates={leg.notify_updates}
-                  notifyHearings={leg.notify_hearings}
-                  notifyAmendments={leg.notify_amendments}
+                  legislation={leg}
+                  initialFollowing={true}
                 />
               ))}
             </div>
