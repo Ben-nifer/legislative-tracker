@@ -362,6 +362,7 @@ Update navigation to add "Following" tab and remove "Bookmarks".
 - Split NAV_LINKS into public and auth-required arrays if needed, and
   conditionally render auth-required links based on user session.
 
+
 --- src/components/layout/MobileNav.tsx ---
 - Apply the same nav changes to the mobile drawer
 
