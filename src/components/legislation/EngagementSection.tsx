@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { ThumbsUp, ThumbsDown, Minus, Bell, Users, MessageSquare } from 'lucide-react'
 import { setStance, type Stance } from '@/app/actions/engagement'
 import { followLegislation, unfollowLegislation } from '@/app/actions/social'
@@ -75,12 +75,14 @@ export default function EngagementSection({
   initialUserStance,
   initialWatching,
   isLoggedIn,
+  friendsFollowing = [],
 }: {
   legislationId: string
   initialStats: Stats
   initialUserStance: Stance | null
   initialWatching: boolean
   isLoggedIn: boolean
+  friendsFollowing?: { display_name: string; username: string }[]
 }) {
   const [stats, setStats] = useState<Stats>(initialStats)
   const [currentStance, setCurrentStance] = useState<Stance | null>(initialUserStance)
@@ -88,6 +90,8 @@ export default function EngagementSection({
   const [pending, setPending] = useState(false)
   const [followPending, setFollowPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showFriendsTooltip, setShowFriendsTooltip] = useState(false)
+  const tooltipRef = useRef<HTMLButtonElement>(null)
 
   async function handleStance(stance: Stance) {
     if (!isLoggedIn || pending) return
@@ -231,6 +235,45 @@ export default function EngagementSection({
           </p>
           <p className="text-xs text-slate-500">Following</p>
         </div>
+      </div>
+
+      {/* ── Social context line ──────────────────── */}
+      <div className="flex items-center gap-1 text-sm text-slate-400">
+        <span>{stats.watching_count.toLocaleString()} following</span>
+        {isLoggedIn && friendsFollowing.length > 0 && (
+          <>
+            <span className="text-slate-600">·</span>
+            <span className="relative inline-block">
+              <button
+                ref={tooltipRef}
+                onMouseEnter={() => setShowFriendsTooltip(true)}
+                onMouseLeave={() => setShowFriendsTooltip(false)}
+                onClick={() => setShowFriendsTooltip((v) => !v)}
+                className="text-slate-400 hover:text-slate-200 transition-colors underline decoration-dotted"
+              >
+                {friendsFollowing.length} {friendsFollowing.length === 1 ? 'person' : 'people'} you follow
+              </button>
+              {showFriendsTooltip && (
+                <div className="absolute bottom-full left-0 mb-2 z-10 w-48 rounded-lg border border-slate-700 bg-slate-800 p-2 shadow-lg">
+                  <p className="mb-1.5 text-xs font-medium text-slate-400">Following this bill</p>
+                  <ul className="space-y-1.5">
+                    {friendsFollowing.map((f) => {
+                      const initials = f.display_name.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
+                      return (
+                        <li key={f.username} className="flex items-center gap-2">
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-500/20 text-xs font-semibold text-indigo-300">
+                            {initials}
+                          </span>
+                          <span className="truncate text-xs text-slate-200">{f.display_name}</span>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              )}
+            </span>
+          </>
+        )}
       </div>
 
       {/* ── Progress bar ─────────────────────────── */}

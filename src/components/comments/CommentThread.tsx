@@ -1,11 +1,6 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { MessageSquare } from 'lucide-react'
-import CommentItem, { type CommentData } from './CommentItem'
-import CommentInput from './CommentInput'
-import CommentFilters from './CommentFilters'
-import Link from 'next/link'
-
-type Sort = 'latest' | 'most_engaged'
+import CommentSection from './CommentSection'
+import { type CommentData } from './CommentItem'
 
 type RawComment = {
   id: string
@@ -19,10 +14,8 @@ type RawComment = {
 
 export default async function CommentThread({
   legislationId,
-  sort = 'latest',
 }: {
   legislationId: string
-  sort?: Sort
 }) {
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -40,108 +33,60 @@ export default async function CommentThread({
     `)
     .eq('legislation_id', legislationId)
     .eq('is_hidden', false)
-    .order('created_at', { ascending: false })
+    .order('created_at', { ascending: true })
 
   const rows = (raw ?? []) as unknown as RawComment[]
 
-  // Build enriched comment objects
-  const enriched: (CommentData & { parent_comment_id: string | null; engagement: number })[] =
-    rows.map((r) => {
-      const votes = r.comment_votes ?? []
-      const voteScore = votes.reduce((sum, v) => sum + v.vote, 0)
-      const userVoteRow = user ? votes.find((v) => v.user_id === user.id) : null
-      const profile = Array.isArray(r.user_profiles) ? r.user_profiles[0] : r.user_profiles
-
-      return {
-        id: r.id,
-        body: r.body,
-        created_at: r.created_at,
-        stance_context: r.stance_context,
-        parent_comment_id: r.parent_comment_id,
-        vote_score: voteScore,
-        user_vote: userVoteRow ? (userVoteRow.vote as 1 | -1) : null,
-        engagement: votes.length,
-        author: {
-          username: profile?.username ?? 'unknown',
-          display_name: profile?.display_name ?? 'Unknown User',
-        },
-        replies: [],
-      }
+  // Build enriched flat list
+  const byId = new Map<string, CommentData & { _parentId: string | null }>()
+  for (const r of rows) {
+    const votes = r.comment_votes ?? []
+    const voteScore = votes.reduce((sum, v) => sum + v.vote, 0)
+    const userVoteRow = user ? votes.find((v) => v.user_id === user.id) : null
+    const profile = Array.isArray(r.user_profiles) ? r.user_profiles[0] : r.user_profiles
+    byId.set(r.id, {
+      id: r.id,
+      body: r.body,
+      created_at: r.created_at,
+      stance_context: r.stance_context,
+      vote_score: voteScore,
+      user_vote: userVoteRow ? (userVoteRow.vote as 1 | -1) : null,
+      author: {
+        username: profile?.username ?? 'unknown',
+        display_name: profile?.display_name ?? 'Unknown User',
+      },
+      replies: [],
+      _parentId: r.parent_comment_id,
     })
+  }
 
-  // Build comment tree (one level deep)
-  const byId = new Map(enriched.map((c) => [c.id, c]))
-  const topLevel: typeof enriched = []
-
-  for (const c of enriched) {
-    if (!c.parent_comment_id) {
-      topLevel.push(c)
+  // Build tree
+  const topLevel: CommentData[] = []
+  for (const comment of byId.values()) {
+    if (!comment._parentId) {
+      topLevel.push(comment)
     } else {
-      const parent = byId.get(c.parent_comment_id)
-      if (parent) parent.replies.push(c)
+      const parent = byId.get(comment._parentId)
+      if (parent) {
+        parent.replies.push(comment)
+      } else {
+        topLevel.push(comment)
+      }
     }
   }
 
-  // Sort replies newest first
+  // Sort replies oldest-first within each parent
   for (const c of topLevel) {
-    c.replies.sort(
-      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    )
+    c.replies.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
   }
-
-  // Sort top-level
-  if (sort === 'most_engaged') {
-    topLevel.sort((a, b) => b.engagement - a.engagement)
-  } else {
-    topLevel.sort(
-      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    )
-  }
+  // Top-level default: newest first
+  topLevel.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
   return (
-    <section id="comments" className="space-y-5">
-      <div className="flex items-center justify-between">
-        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
-          <MessageSquare size={14} />
-          Discussion
-          {topLevel.length > 0 && (
-            <span className="rounded-full bg-slate-700 px-2 py-0.5 text-xs normal-case text-slate-300">
-              {rows.length}
-            </span>
-          )}
-        </h2>
-        {rows.length > 1 && <CommentFilters currentSort={sort} />}
-      </div>
-
-      {/* Input or sign-in prompt */}
-      {user ? (
-        <CommentInput legislationId={legislationId} />
-      ) : (
-        <div className="rounded-lg border border-slate-700 bg-slate-800/60 px-4 py-3 text-sm text-slate-400">
-          <Link href="/login" className="text-indigo-400 hover:underline">
-            Sign in
-          </Link>{' '}
-          to join the discussion.
-        </div>
-      )}
-
-      {/* Comments */}
-      {topLevel.length === 0 ? (
-        <p className="py-6 text-center text-sm text-slate-600">
-          No comments yet. Be the first to share your thoughts.
-        </p>
-      ) : (
-        <div className="space-y-5">
-          {topLevel.map((comment) => (
-            <CommentItem
-              key={comment.id}
-              comment={comment}
-              legislationId={legislationId}
-              isLoggedIn={!!user}
-            />
-          ))}
-        </div>
-      )}
-    </section>
+    <CommentSection
+      legislationId={legislationId}
+      initialComments={topLevel}
+      isLoggedIn={!!user}
+    />
   )
 }

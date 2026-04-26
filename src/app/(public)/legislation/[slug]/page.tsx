@@ -13,7 +13,6 @@ import {
   Clock,
 } from 'lucide-react'
 import { formatDistanceToNow, format } from 'date-fns'
-import { Suspense } from 'react'
 import CommentThread from '@/components/comments/CommentThread'
 import EngagementSection from '@/components/legislation/EngagementSection'
 
@@ -210,14 +209,10 @@ function fmt(dateStr: string | null) {
 
 export default async function LegislationDetailPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ sort?: string }>
 }) {
   const { slug } = await params
-  const { sort } = await searchParams
-  const commentSort = sort === 'most_engaged' ? 'most_engaged' : 'latest'
 
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -227,8 +222,10 @@ export default async function LegislationDetailPage({
 
   let userStance: 'support' | 'oppose' | 'neutral' | null = null
   let isFollowing = false
+  let friendsFollowing: { display_name: string; username: string }[] = []
+
   if (user) {
-    const [stanceResult, followResult] = await Promise.all([
+    const [stanceResult, followResult, followingIdsResult] = await Promise.all([
       supabase
         .from('user_stances')
         .select('stance')
@@ -239,9 +236,27 @@ export default async function LegislationDetailPage({
         .select('legislation_id')
         .match({ user_id: user.id, legislation_id: legislation.id })
         .maybeSingle(),
+      supabase
+        .from('user_follows')
+        .select('following_id')
+        .eq('follower_id', user.id),
     ])
     userStance = (stanceResult.data?.stance as typeof userStance) ?? null
     isFollowing = !!followResult.data
+
+    const followingIds = (followingIdsResult.data ?? []).map((r) => r.following_id)
+    if (followingIds.length > 0) {
+      const { data: friendRows } = await supabase
+        .from('legislation_follows')
+        .select('user_id, user_profiles(display_name, username)')
+        .eq('legislation_id', legislation.id)
+        .in('user_id', followingIds)
+        .limit(5)
+      friendsFollowing = (friendRows ?? []).flatMap((r) => {
+        const p = Array.isArray(r.user_profiles) ? r.user_profiles[0] : r.user_profiles
+        return p ? [{ display_name: p.display_name, username: p.username }] : []
+      })
+    }
   }
 
   const statusStyle = getStatusStyle(legislation.status)
@@ -470,6 +485,7 @@ export default async function LegislationDetailPage({
               initialUserStance={userStance}
               initialWatching={isFollowing}
               isLoggedIn={!!user}
+              friendsFollowing={friendsFollowing}
             />
           </section>
 
@@ -506,16 +522,7 @@ export default async function LegislationDetailPage({
 
           {/* ── Comments ────────────────────────────────────────────── */}
           <div className="rounded-xl border border-slate-700/60 bg-slate-800/80 p-5">
-            <Suspense fallback={
-              <div className="flex items-center gap-2 py-4 text-sm text-slate-500">
-                <MessageSquare size={14} /> Loading comments...
-              </div>
-            }>
-              <CommentThread
-                legislationId={legislation.id}
-                sort={commentSort}
-              />
-            </Suspense>
+            <CommentThread legislationId={legislation.id} />
           </div>
 
         </div>

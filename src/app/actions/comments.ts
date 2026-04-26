@@ -4,11 +4,19 @@ import { revalidatePath } from 'next/cache'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { checkModeration } from '@/lib/moderation/check'
 
+export type NewComment = {
+  id: string
+  body: string
+  created_at: string
+  stance_context: 'support' | 'oppose' | 'neutral' | null
+  author: { username: string; display_name: string }
+}
+
 export async function addComment(
   legislationId: string,
   body: string,
   parentCommentId?: string | null
-): Promise<{ error?: string }> {
+): Promise<{ error?: string; comment?: NewComment }> {
   if (!body.trim()) return { error: 'Comment cannot be empty' }
   if (body.length > 2000) return { error: 'Comment is too long (max 2000 characters)' }
 
@@ -16,7 +24,6 @@ export async function addComment(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'You must be signed in to comment' }
 
-  // Check moderation
   const { flagged, categories } = await checkModeration(body)
   if (flagged) {
     return {
@@ -24,28 +31,55 @@ export async function addComment(
     }
   }
 
-  // Get user's current stance for context
-  const { data: stanceRow } = await supabase
-    .from('user_stances')
-    .select('stance')
-    .eq('user_id', user.id)
-    .eq('legislation_id', legislationId)
-    .maybeSingle()
+  const [{ data: stanceRow }, { data: profile }] = await Promise.all([
+    supabase
+      .from('user_stances')
+      .select('stance')
+      .eq('user_id', user.id)
+      .eq('legislation_id', legislationId)
+      .maybeSingle(),
+    supabase
+      .from('user_profiles')
+      .select('username, display_name')
+      .eq('id', user.id)
+      .single(),
+  ])
 
   const stanceContext = stanceRow?.stance ?? null
 
-  const { error } = await supabase.from('comments').insert({
-    user_id: user.id,
-    legislation_id: legislationId,
-    body: body.trim(),
-    parent_comment_id: parentCommentId ?? null,
-    stance_context: stanceContext,
-  })
+  const { data, error } = await supabase
+    .from('comments')
+    .insert({
+      user_id: user.id,
+      legislation_id: legislationId,
+      body: body.trim(),
+      parent_comment_id: parentCommentId ?? null,
+      stance_context: stanceContext,
+      is_hidden: false,
+      is_flagged: false,
+    })
+    .select('id, body, created_at, stance_context')
+    .single()
 
-  if (error) return { error: error.message }
+  if (error || !data) {
+    console.error('[addComment] insert error:', error)
+    return { error: error?.message ?? 'Failed to post comment' }
+  }
 
-  revalidatePath('/legislation', 'layout')
-  return {}
+  revalidatePath('/legislation/[slug]', 'page')
+
+  return {
+    comment: {
+      id: data.id,
+      body: data.body,
+      created_at: data.created_at,
+      stance_context: data.stance_context as NewComment['stance_context'],
+      author: {
+        username: profile?.username ?? 'unknown',
+        display_name: profile?.display_name ?? 'Unknown User',
+      },
+    },
+  }
 }
 
 export async function voteComment(
@@ -57,7 +91,6 @@ export async function voteComment(
   if (!user) return { error: 'You must be signed in to vote' }
 
   if (vote === 0) {
-    // Remove vote
     await supabase
       .from('comment_votes')
       .delete()
@@ -69,7 +102,6 @@ export async function voteComment(
     )
   }
 
-  revalidatePath('/legislation', 'layout')
   return {}
 }
 

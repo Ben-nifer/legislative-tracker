@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { addComment } from '@/app/actions/comments'
 
 export default function CommentInput({
@@ -14,6 +15,7 @@ export default function CommentInput({
   placeholder?: string
   onSuccess?: () => void
 }) {
+  const router = useRouter()
   const [body, setBody] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -34,6 +36,7 @@ export default function CommentInput({
       setError(result.error)
     } else {
       setBody('')
+      router.refresh()
       onSuccess?.()
     }
   }
