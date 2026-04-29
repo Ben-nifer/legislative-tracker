@@ -248,7 +248,7 @@ export async function syncLegislation(since = '2022-01-01'): Promise<number> {
 export async function syncSponsorships(
   offset = 0,
   concurrency = 30
-): Promise<{ synced: number; offset: number; total: number; done: boolean; apiFailed: number; unmatched: number; sponsorsFound: number }> {
+): Promise<{ synced: number; offset: number; total: number; done: boolean; apiFailed: number; unmatched: number; sponsorsFound: number; skipped: number }> {
   const supabase = createServiceClient()
 
   // Build legislator lookups: slug → id AND normalized name → id
@@ -281,12 +281,27 @@ export async function syncSponsorships(
     .range(offset, offset + concurrency - 1)
 
   if (!batch || batch.length === 0) {
-    return { synced: 0, offset, total: total ?? 0, done: true, apiFailed: 0, unmatched: 0, sponsorsFound: 0 }
+    return { synced: 0, offset, total: total ?? 0, done: true, apiFailed: 0, unmatched: 0, sponsorsFound: 0, skipped: 0 }
+  }
+
+  // Skip bills that already have sponsorships
+  const batchIds = batch.map((b) => b.id)
+  const { data: existingRows } = await supabase
+    .from('sponsorships')
+    .select('legislation_id')
+    .in('legislation_id', batchIds)
+  const alreadySynced = new Set((existingRows ?? []).map((e) => e.legislation_id))
+  const toFetch = batch.filter((b) => !alreadySynced.has(b.id))
+  const skipped = batch.length - toFetch.length
+
+  if (toFetch.length === 0) {
+    const nextOffset = offset + concurrency
+    return { synced: 0, offset: nextOffset, total: total ?? 0, done: nextOffset >= (total ?? 0), apiFailed: 0, unmatched: 0, sponsorsFound: 0, skipped }
   }
 
   // Fetch sponsors for each bill concurrently
   const results = await Promise.allSettled(
-    batch.map(async (item) => {
+    toFetch.map(async (item) => {
       const matterId = new URL(item.legistar_url!).searchParams.get('ID')
       if (!matterId) return []
       const sponsors = await legistar.getMatterSponsors(Number(matterId))
@@ -329,7 +344,7 @@ export async function syncSponsorships(
   const nextOffset = offset + concurrency
   const done = nextOffset >= (total ?? 0)
 
-  return { synced: rows.length, offset: nextOffset, total: total ?? 0, done, apiFailed, unmatched, sponsorsFound }
+  return { synced: rows.length, offset: nextOffset, total: total ?? 0, done, apiFailed, unmatched, sponsorsFound, skipped }
 }
 
 // Step 4: Create empty stats rows for any legislation that doesn't have one yet

@@ -47,18 +47,18 @@ async function assertAdmin() {
  */
 export async function runSyncSponsorships(
   offset = 0
-): Promise<{ synced: number; offset: number; total: number; done: boolean; apiFailed: number; unmatched: number; sponsorsFound: number; error?: string }> {
+): Promise<{ synced: number; offset: number; total: number; done: boolean; apiFailed: number; unmatched: number; sponsorsFound: number; skipped: number; error?: string }> {
   try {
     await assertAdmin()
   } catch (e) {
-    return { synced: 0, offset, total: 0, done: true, apiFailed: 0, unmatched: 0, sponsorsFound: 0, error: String(e) }
+    return { synced: 0, offset, total: 0, done: true, apiFailed: 0, unmatched: 0, sponsorsFound: 0, skipped: 0, error: String(e) }
   }
 
   try {
     const result = await syncSponsorships(offset)
     return result
   } catch (e) {
-    return { synced: 0, offset, total: 0, done: true, apiFailed: 0, unmatched: 0, sponsorsFound: 0, error: String(e) }
+    return { synced: 0, offset, total: 0, done: true, apiFailed: 0, unmatched: 0, sponsorsFound: 0, skipped: 0, error: String(e) }
   }
 }
 

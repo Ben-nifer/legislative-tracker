@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { RefreshCw, Sparkles, BarChart2, Tag, Users, FileText, MapPin } from 'lucide-react'
 import { generateSummariesBatch, generateShortSummaries, seedTopics, runSyncSponsorships, runSyncCouncilMembers, runSyncCommitteeMemberships, runScrapeDistrictData, runSyncCommunityBoards } from '@/app/actions/admin'
 
@@ -103,12 +103,12 @@ function SponsorshipsCard() {
   const [state, setState] = useState<JobState>('idle')
   const [log, setLog] = useState<string[]>([])
   const [autoRun, setAutoRun] = useState(false)
-  const autoRunRef = { current: false }
+  const autoRunRef = useRef(false)
 
   async function runOnce(offset: number): Promise<{ nextOffset: number; done: boolean }> {
     const res = await runSyncSponsorships(offset)
     setLog((prev) => [
-      `offset ${offset}/${res.total} — found ${res.sponsorsFound} sponsors, synced ${res.synced}, unmatched ${res.unmatched}${res.apiFailed > 0 ? `, apiFailed ${res.apiFailed}` : ''}${res.error ? ` — ${res.error}` : ''}`,
+      `offset ${offset}/${res.total} — found ${res.sponsorsFound} sponsors, synced ${res.synced}, skipped ${res.skipped}, unmatched ${res.unmatched}${res.apiFailed > 0 ? `, apiFailed ${res.apiFailed}` : ''}${res.error ? ` — ${res.error}` : ''}`,
       ...prev.slice(0, 19),
     ])
     return { nextOffset: res.offset, done: res.done }

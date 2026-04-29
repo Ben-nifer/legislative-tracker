@@ -54,6 +54,11 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
+                <Link href="/terms" className="text-sm text-slate-400 transition-colors hover:text-slate-200">
+                  Terms of Service
+                </Link>
+              </li>
+              <li>
                 <a
                   href="https://legistar.council.nyc.gov"
                   target="_blank"

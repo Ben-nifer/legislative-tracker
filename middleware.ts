@@ -25,6 +25,17 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/', request.url))
   }
 
+  // Require terms acceptance for logged-in users on protected routes
+  if (isProtected && user && pathname !== '/terms/accept') {
+    const termsAccepted = request.cookies.get('terms_accepted')?.value === '1'
+    if (!termsAccepted) {
+      const acceptUrl = request.nextUrl.clone()
+      acceptUrl.pathname = '/terms/accept'
+      acceptUrl.searchParams.set('next', pathname)
+      return NextResponse.redirect(acceptUrl)
+    }
+  }
+
   return supabaseResponse
 }
 

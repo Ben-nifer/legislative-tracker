@@ -105,7 +105,10 @@ function LoginForm() {
               <div className="text-2xl">📬</div>
               <p className="text-white font-medium text-sm">Check your email</p>
               <p className="text-slate-400 text-sm">
-                We sent a magic link to <span className="text-white">{email}</span>
+                We sent a magic link from{' '}
+                <span className="text-slate-300">noreply@legislative-tracker.com</span>{' '}
+                to <span className="text-white">{email}</span>.
+                Check your spam folder if it doesn&apos;t arrive within a minute.
               </p>
               <button
                 onClick={() => setSent(false)}
