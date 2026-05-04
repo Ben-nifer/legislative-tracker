@@ -8,7 +8,7 @@ type RawComment = {
   created_at: string
   stance_context: 'support' | 'oppose' | 'neutral' | null
   parent_comment_id: string | null
-  user_profiles: { username: string; display_name: string } | null
+  user_id: string
   comment_votes: { vote: number; user_id: string }[]
 }
 
@@ -28,7 +28,7 @@ export default async function CommentThread({
       created_at,
       stance_context,
       parent_comment_id,
-      user_profiles(username, display_name),
+      user_id,
       comment_votes(vote, user_id)
     `)
     .eq('legislation_id', legislationId)
@@ -37,13 +37,26 @@ export default async function CommentThread({
 
   const rows = (raw ?? []) as unknown as RawComment[]
 
+  // Fetch author profiles in one batch
+  const authorIds = [...new Set(rows.map((r) => r.user_id))]
+  const { data: profilesData } = authorIds.length > 0
+    ? await supabase
+        .from('user_profiles')
+        .select('id, username, display_name')
+        .in('id', authorIds)
+    : { data: [] }
+
+  const profileMap = new Map(
+    (profilesData ?? []).map((p) => [p.id, p as { id: string; username: string; display_name: string }])
+  )
+
   // Build enriched flat list
   const byId = new Map<string, CommentData & { _parentId: string | null }>()
   for (const r of rows) {
     const votes = r.comment_votes ?? []
     const voteScore = votes.reduce((sum, v) => sum + v.vote, 0)
     const userVoteRow = user ? votes.find((v) => v.user_id === user.id) : null
-    const profile = Array.isArray(r.user_profiles) ? r.user_profiles[0] : r.user_profiles
+    const profile = profileMap.get(r.user_id)
     byId.set(r.id, {
       id: r.id,
       body: r.body,
@@ -79,7 +92,7 @@ export default async function CommentThread({
   for (const c of topLevel) {
     c.replies.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
   }
-  // Top-level default: newest first
+  // Top-level: newest first
   topLevel.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
   return (

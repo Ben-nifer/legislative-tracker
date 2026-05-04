@@ -67,6 +67,7 @@ export default function CommentSection({
             : c
         )
       )
+      router.refresh()
     }
     return undefined
   }
