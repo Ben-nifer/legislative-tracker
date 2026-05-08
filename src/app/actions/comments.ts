@@ -31,7 +31,7 @@ export async function addComment(
     }
   }
 
-  const [{ data: stanceRow }, { data: profile }] = await Promise.all([
+  const [{ data: stanceRow }, { data: profile }, { data: leg }] = await Promise.all([
     supabase
       .from('user_stances')
       .select('stance')
@@ -42,6 +42,11 @@ export async function addComment(
       .from('user_profiles')
       .select('username, display_name')
       .eq('id', user.id)
+      .single(),
+    supabase
+      .from('legislation')
+      .select('file_number, slug')
+      .eq('id', legislationId)
       .single(),
   ])
 
@@ -68,6 +73,28 @@ export async function addComment(
     return { error: error?.message ?? 'Failed to post comment' }
   }
 
+  // Notify parent comment author of reply
+  if (parentCommentId && leg) {
+    const { data: parent } = await supabase
+      .from('comments')
+      .select('user_id')
+      .eq('id', parentCommentId)
+      .single()
+
+    if (parent && parent.user_id !== user.id) {
+      await supabase.from('notifications').insert({
+        user_id: parent.user_id,
+        type: 'comment_reply',
+        title: `${profile?.display_name ?? 'Someone'} replied to your comment`,
+        body: `On ${leg.file_number}`,
+        url: `/legislation/${leg.slug}`,
+        legislation_id: legislationId,
+        comment_id: data.id,
+        actor_user_id: user.id,
+      })
+    }
+  }
+
   revalidatePath('/legislation', 'layout')
 
   return {
@@ -92,6 +119,13 @@ export async function voteComment(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'You must be signed in to vote' }
 
+  // Check existing vote before mutating to avoid duplicate upvote notifications
+  const { data: existing } = await supabase
+    .from('comment_votes')
+    .select('vote')
+    .match({ user_id: user.id, comment_id: commentId })
+    .maybeSingle()
+
   if (vote === 0) {
     await supabase
       .from('comment_votes')
@@ -102,6 +136,31 @@ export async function voteComment(
       { user_id: user.id, comment_id: commentId, vote },
       { onConflict: 'user_id,comment_id' }
     )
+  }
+
+  // Notify comment author on new upvote (not if they already had an upvote from this user)
+  if (vote === 1 && existing?.vote !== 1) {
+    const { data: comment } = await supabase
+      .from('comments')
+      .select('user_id, legislation_id, legislation:legislation(file_number, slug)')
+      .eq('id', commentId)
+      .single()
+
+    if (comment && comment.user_id !== user.id) {
+      const legData = Array.isArray(comment.legislation)
+        ? comment.legislation[0]
+        : comment.legislation
+      await supabase.from('notifications').insert({
+        user_id: comment.user_id,
+        type: 'comment_upvote',
+        title: 'Your comment was upvoted',
+        body: legData?.file_number ? `On ${legData.file_number}` : null,
+        url: legData?.slug ? `/legislation/${legData.slug}` : null,
+        legislation_id: comment.legislation_id,
+        comment_id: commentId,
+        actor_user_id: user.id,
+      })
+    }
   }
 
   return {}

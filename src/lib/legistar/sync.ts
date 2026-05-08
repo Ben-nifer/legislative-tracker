@@ -112,7 +112,6 @@ async function notifyStatusChanges(
   batch: { slug: string; status: string; title: string; file_number: string }[],
   prevBySlug: Map<string, { id: string; slug: string; status: string }>
 ): Promise<void> {
-  // Find slugs where status changed (skip newly inserted rows with no prev entry)
   const changedSlugs = batch
     .filter((r) => {
       const prev = prevBySlug.get(r.slug)
@@ -122,31 +121,61 @@ async function notifyStatusChanges(
 
   if (!changedSlugs.length) return
 
-  // Get IDs for changed legislation (needed to look up followers)
   const { data: current } = await supabase
     .from('legislation')
     .select('id, slug, status, title, file_number')
     .in('slug', changedSlugs)
 
   for (const leg of current ?? []) {
-    const { data: followers } = await supabase
+    const isHearing = /hearing|scheduled/i.test(leg.status)
+    const isAmendment = /amend/i.test(leg.status)
+
+    const { data: follows } = await supabase
       .from('legislation_follows')
-      .select('user_id')
+      .select('user_id, notify_updates, notify_hearings, notify_amendments')
       .eq('legislation_id', leg.id)
-      .eq('notify_updates', true)
+      .or('notify_updates.eq.true,notify_hearings.eq.true,notify_amendments.eq.true')
 
-    if (!followers?.length) continue
+    if (!follows?.length) continue
 
-    await supabase.from('notifications').insert(
-      followers.map((f) => ({
-        user_id: f.user_id,
-        type: 'legislation_update',
-        title: `${leg.file_number} status updated`,
-        body: leg.status,
-        url: `/legislation/${leg.slug}`,
-        legislation_id: leg.id,
-      }))
-    )
+    const rows: object[] = []
+
+    for (const follow of follows) {
+      if (follow.notify_updates) {
+        rows.push({
+          user_id: follow.user_id,
+          type: 'legislation_update',
+          title: `${leg.file_number} status updated`,
+          body: leg.status,
+          url: `/legislation/${leg.slug}`,
+          legislation_id: leg.id,
+        })
+      }
+      if (isHearing && follow.notify_hearings) {
+        rows.push({
+          user_id: follow.user_id,
+          type: 'hearing_alert',
+          title: `Hearing scheduled for ${leg.file_number}`,
+          body: leg.status,
+          url: `/legislation/${leg.slug}`,
+          legislation_id: leg.id,
+        })
+      }
+      if (isAmendment && follow.notify_amendments) {
+        rows.push({
+          user_id: follow.user_id,
+          type: 'bill_amendment',
+          title: `${leg.file_number} was amended`,
+          body: leg.status,
+          url: `/legislation/${leg.slug}`,
+          legislation_id: leg.id,
+        })
+      }
+    }
+
+    if (rows.length > 0) {
+      await supabase.from('notifications').insert(rows)
+    }
   }
 }
 
