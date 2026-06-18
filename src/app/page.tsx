@@ -2,18 +2,21 @@ import Link from 'next/link'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { ArrowRight, TrendingUp, Rss, Sparkles } from 'lucide-react'
 import { format } from 'date-fns'
+import CouncilMemberLookup from '@/components/council/CouncilMemberLookup'
 
 export const revalidate = 300
 
 function getStatusStyle(status: string) {
   const s = status.toLowerCase()
   if (s.includes('enact') || s.includes('adopt') || s.includes('pass'))
-    return 'bg-emerald-500/20 text-emerald-300'
+    return 'bg-emerald-50 text-emerald-700 border border-emerald-200'
   if (s.includes('veto') || s.includes('fail') || s.includes('withdrawn'))
-    return 'bg-red-500/20 text-red-300'
+    return 'bg-red-50 text-red-700 border border-red-200'
   if (s.includes('hearing'))
-    return 'bg-blue-500/20 text-blue-300'
-  return 'bg-amber-500/20 text-amber-300'
+    return 'bg-blue-50 text-nyc-blue border border-blue-200'
+  if (s.includes('committee'))
+    return 'bg-orange-50 text-orange-700 border border-orange-200'
+  return 'bg-slate-100 text-nyc-muted border border-nyc-border'
 }
 
 type LegislationRow = {
@@ -24,6 +27,7 @@ type LegislationRow = {
   status: string
   type: string | null
   intro_date: string | null
+  ai_summary?: string | null
 }
 
 type FeedItem = LegislationRow
@@ -104,12 +108,10 @@ export default async function HomePage() {
   const { data: { user } } = await supabase.auth.getUser()
 
   const [
-    { count: totalLegislation },
     { data: recent },
     { data: trending },
     { data: profile },
   ] = await Promise.all([
-    supabase.from('legislation').select('*', { count: 'exact', head: true }),
     supabase
       .from('legislation')
       .select('id, slug, file_number, title, status, type, intro_date, ai_summary')
@@ -202,43 +204,39 @@ export default async function HomePage() {
   const displayName = profileData?.display_name || profileData?.username || 'there'
 
   return (
-    <main className="min-h-screen bg-slate-950">
+    <main className="min-h-screen bg-nyc-bg">
 
       {user ? (
         /* ── Logged-in greeting ─────────────────────────────────────── */
-        <section className="border-b border-slate-800 bg-slate-900/40 px-4 py-8 sm:px-6 lg:px-8">
+        <section className="border-b border-nyc-border bg-nyc-blue px-4 py-6 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl">
-            <h1 className="text-2xl font-semibold text-white">
+            <h1 className="text-xl font-black uppercase tracking-widest text-white">
               Welcome back, {displayName}
             </h1>
           </div>
         </section>
       ) : (
         /* ── Logged-out hero ────────────────────────────────────────── */
-        <section className="border-b border-slate-800 bg-gradient-to-b from-slate-900 to-slate-950 px-4 py-20 text-center sm:px-6 lg:px-8">
+        <section className="border-b border-nyc-border bg-nyc-blue px-4 py-20 text-center sm:px-6 lg:px-8">
           <div className="mx-auto max-w-2xl">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-3 py-1 text-xs text-indigo-300">
-              <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
-              NYC Council · {totalLegislation?.toLocaleString() ?? '—'} items tracked
-            </div>
-            <h1 className="text-4xl font-bold tracking-tight text-white sm:text-5xl">
+            <h1 className="text-4xl font-black uppercase tracking-tight text-white sm:text-5xl">
               NYC legislation,{' '}
-              <span className="text-indigo-400">made accessible</span>
+              <span className="text-nyc-orange">made accessible</span>
             </h1>
-            <p className="mt-4 text-lg text-slate-400">
+            <p className="mt-4 text-lg text-blue-200">
               Browse, understand, and engage with New York City Council bills and
               resolutions. Track what matters to your neighborhood.
             </p>
             <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
               <Link
                 href="/legislation"
-                className="inline-flex items-center gap-2 rounded-lg bg-indigo-500 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-400"
+                className="inline-flex items-center gap-2 rounded bg-nyc-orange px-6 py-3 text-sm font-black uppercase tracking-widest text-white transition-colors hover:bg-nyc-orange-hover"
               >
                 Browse Legislation <ArrowRight size={16} />
               </Link>
               <Link
                 href="/council-members"
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-5 py-2.5 text-sm font-medium text-slate-200 transition-colors hover:border-slate-600 hover:bg-slate-700"
+                className="inline-flex items-center gap-2 rounded border border-white/30 bg-white/10 px-6 py-3 text-sm font-bold uppercase tracking-widest text-white transition-colors hover:bg-white/20"
               >
                 Council Members
               </Link>
@@ -247,39 +245,34 @@ export default async function HomePage() {
         </section>
       )}
 
+      {/* ── Find Your Council Member — visible to all ─────────────── */}
+      <section className="mx-auto max-w-7xl px-4 pt-10 sm:px-6 lg:px-8">
+        <div className="max-w-xl">
+          <CouncilMemberLookup />
+        </div>
+      </section>
+
       {user ? (
         <>
           {/* ── For You ───────────────────────────────────────────────── */}
           <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
-            <div className="mb-4 flex items-center gap-2">
-              <Sparkles size={16} className="text-indigo-400" />
-              <h2 className="text-base font-semibold text-slate-200">For You</h2>
+            <div className="mb-4 flex items-center gap-3">
+              <Sparkles size={15} className="text-nyc-orange" />
+              <h2 className="border-l-4 border-nyc-orange pl-3 text-xs font-black uppercase tracking-widest text-white">For You</h2>
             </div>
             {!forYouHasEngagement && (
-              <p className="mb-4 text-sm text-slate-500">
+              <p className="mb-4 text-sm text-nyc-muted">
                 Follow topics or council members to get personalized recommendations.
               </p>
             )}
             {forYouItems.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/40 p-8 text-center">
-                <p className="text-sm text-slate-400">No recommendations yet — browse legislation to get started.</p>
+              <div className="rounded border border-dashed border-nyc-border-light bg-nyc-card p-8 text-center">
+                <p className="text-sm text-nyc-muted">No recommendations yet — browse legislation to get started.</p>
               </div>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {forYouItems.map((item) => (
-                  <Link
-                    key={item.id}
-                    href={`/legislation/${item.slug}`}
-                    className="block rounded-xl border border-slate-800 bg-slate-900/60 p-4 transition-colors hover:border-slate-700 hover:bg-slate-800/60"
-                  >
-                    <div className="mb-2 flex items-center gap-2">
-                      <span className={`rounded-full px-2 py-0.5 text-xs ${getStatusStyle(item.status)}`}>
-                        {item.status}
-                      </span>
-                      <span className="font-mono text-xs text-slate-500">{item.file_number}</span>
-                    </div>
-                    <p className="line-clamp-2 text-sm text-slate-300">{item.title}</p>
-                  </Link>
+                  <MiniCard key={item.id} item={item} />
                 ))}
               </div>
             )}
@@ -287,44 +280,27 @@ export default async function HomePage() {
 
           {/* ── New from people you follow ─────────────────────────────── */}
           <section className="mx-auto max-w-7xl px-4 pb-10 sm:px-6 lg:px-8">
-            <div className="mb-4 flex items-center gap-2">
-              <Rss size={16} className="text-indigo-400" />
-              <h2 className="text-base font-semibold text-slate-200">New from people you follow</h2>
+            <div className="mb-4 flex items-center gap-3">
+              <Rss size={15} className="text-nyc-orange" />
+              <h2 className="border-l-4 border-nyc-orange pl-3 text-xs font-black uppercase tracking-widest text-white">New from people you follow</h2>
             </div>
             {!hasFollows ? (
-              <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/40 p-8 text-center">
-                <p className="text-sm text-slate-400">Follow council members to see their legislation here.</p>
+              <div className="rounded border border-dashed border-nyc-border-light bg-nyc-card p-8 text-center">
+                <p className="text-sm text-nyc-muted">Follow council members to see their legislation here.</p>
                 <div className="mt-3 flex items-center justify-center gap-4 text-sm">
-                  <Link href="/council-members" className="text-indigo-400 hover:underline">Browse council members</Link>
-                  <span className="text-slate-700">·</span>
-                  <Link href="/following" className="text-indigo-400 hover:underline">Manage following</Link>
+                  <Link href="/council-members" className="font-bold text-nyc-orange hover:underline">Browse council members</Link>
+                  <span className="text-nyc-border-light">·</span>
+                  <Link href="/following" className="font-bold text-nyc-orange hover:underline">Manage following</Link>
                 </div>
               </div>
             ) : feedItems.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-700 bg-slate-900/40 p-8 text-center">
-                <p className="text-sm text-slate-500">No recent legislation from the people you follow.</p>
+              <div className="rounded border border-dashed border-nyc-border-light bg-nyc-card p-8 text-center">
+                <p className="text-sm text-nyc-muted">No recent legislation from the people you follow.</p>
               </div>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {feedItems.map((item) => (
-                  <Link
-                    key={item.id}
-                    href={`/legislation/${item.slug}`}
-                    className="block rounded-xl border border-slate-800 bg-slate-900/60 p-4 transition-colors hover:border-slate-700 hover:bg-slate-800/60"
-                  >
-                    <div className="mb-2 flex items-center gap-2">
-                      <span className={`rounded-full px-2 py-0.5 text-xs ${getStatusStyle(item.status)}`}>
-                        {item.status}
-                      </span>
-                      <span className="font-mono text-xs text-slate-500">{item.file_number}</span>
-                      {item.intro_date && (
-                        <span className="ml-auto text-xs text-slate-600">
-                          {format(new Date(item.intro_date), 'MMM d')}
-                        </span>
-                      )}
-                    </div>
-                    <p className="line-clamp-2 text-sm text-slate-300">{item.title}</p>
-                  </Link>
+                  <MiniCard key={item.id} item={item} showDate />
                 ))}
               </div>
             )}
@@ -333,11 +309,11 @@ export default async function HomePage() {
           {/* ── Trending (logged-in) ───────────────────────────────────── */}
           <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
             <div className="mb-4 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <TrendingUp size={16} className="text-indigo-400" />
-                <h2 className="text-base font-semibold text-slate-200">Trending</h2>
+              <div className="flex items-center gap-3">
+                <TrendingUp size={15} className="text-nyc-orange" />
+                <h2 className="border-l-4 border-nyc-orange pl-3 text-xs font-black uppercase tracking-widest text-white">Trending</h2>
               </div>
-              <Link href="/trending" className="text-xs text-indigo-400 hover:underline">
+              <Link href="/trending" className="text-xs font-bold text-nyc-orange hover:underline">
                 View all →
               </Link>
             </div>
@@ -350,20 +326,19 @@ export default async function HomePage() {
                   <Link
                     key={leg.id}
                     href={`/legislation/${leg.slug}`}
-                    className="block rounded-xl border border-slate-800 bg-slate-900/60 p-4 transition-colors hover:border-slate-700 hover:bg-slate-800/60"
+                    className="block rounded border border-nyc-border bg-nyc-card p-4 transition-colors hover:border-nyc-border-light hover:bg-nyc-card-hover"
                   >
                     <div className="mb-2 flex items-center gap-2">
-                      <span className={`rounded-full px-2 py-0.5 text-xs ${getStatusStyle(leg.status)}`}>
+                      <span className={`rounded px-2 py-0.5 text-xs font-bold uppercase tracking-wide ${getStatusStyle(leg.status)}`}>
                         {leg.status}
                       </span>
-                      <span className="font-mono text-xs text-slate-500">{leg.file_number}</span>
+                      <span className="font-mono text-xs text-nyc-muted">{leg.file_number}</span>
                     </div>
-                    <p className="line-clamp-2 text-sm text-slate-300">{leg.title}</p>
-                    <div className="mt-2 flex items-center gap-3 text-xs text-slate-600">
-                      <span className="text-emerald-500/80">{row.support_count ?? 0} support</span>
-                      <span className="text-red-500/80">{row.oppose_count ?? 0} oppose</span>
-                      <span className="text-slate-500">{row.comment_count ?? 0} comments</span>
-                      {total > 0 && <span className="ml-auto">{total} responses</span>}
+                    <p className="line-clamp-2 text-sm font-semibold text-nyc-blue">{leg.title}</p>
+                    <div className="mt-2 flex items-center gap-3 text-xs">
+                      <span className="font-bold text-emerald-600">{row.support_count ?? 0} for</span>
+                      <span className="font-bold text-red-600">{row.oppose_count ?? 0} against</span>
+                      {total > 0 && <span className="ml-auto font-bold text-nyc-orange">{total} stances</span>}
                     </div>
                   </Link>
                 )
@@ -376,11 +351,11 @@ export default async function HomePage() {
           {/* ── Trending (logged-out) ──────────────────────────────────── */}
           <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
             <div className="mb-4 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <TrendingUp size={16} className="text-indigo-400" />
-                <h2 className="text-base font-semibold text-slate-200">Trending</h2>
+              <div className="flex items-center gap-3">
+                <TrendingUp size={15} className="text-nyc-orange" />
+                <h2 className="border-l-4 border-nyc-orange pl-3 text-xs font-black uppercase tracking-widest text-white">Trending</h2>
               </div>
-              <Link href="/trending" className="text-xs text-indigo-400 hover:underline">
+              <Link href="/trending" className="text-xs font-bold text-nyc-orange hover:underline">
                 View all →
               </Link>
             </div>
@@ -393,20 +368,19 @@ export default async function HomePage() {
                   <Link
                     key={leg.id}
                     href={`/legislation/${leg.slug}`}
-                    className="block rounded-xl border border-slate-800 bg-slate-900/60 p-4 transition-colors hover:border-slate-700 hover:bg-slate-800/60"
+                    className="block rounded border border-nyc-border bg-nyc-card p-4 transition-colors hover:border-nyc-border-light hover:bg-nyc-card-hover"
                   >
                     <div className="mb-2 flex items-center gap-2">
-                      <span className={`rounded-full px-2 py-0.5 text-xs ${getStatusStyle(leg.status)}`}>
+                      <span className={`rounded px-2 py-0.5 text-xs font-bold uppercase tracking-wide ${getStatusStyle(leg.status)}`}>
                         {leg.status}
                       </span>
-                      <span className="font-mono text-xs text-slate-500">{leg.file_number}</span>
+                      <span className="font-mono text-xs text-nyc-muted">{leg.file_number}</span>
                     </div>
-                    <p className="line-clamp-2 text-sm text-slate-300">{leg.title}</p>
-                    <div className="mt-2 flex items-center gap-3 text-xs text-slate-600">
-                      <span className="text-emerald-500/80">{row.support_count ?? 0} support</span>
-                      <span className="text-red-500/80">{row.oppose_count ?? 0} oppose</span>
-                      <span className="text-slate-500">{row.comment_count ?? 0} comments</span>
-                      {total > 0 && <span className="ml-auto">{total} responses</span>}
+                    <p className="line-clamp-2 text-sm font-semibold text-nyc-blue">{leg.title}</p>
+                    <div className="mt-2 flex items-center gap-3 text-xs">
+                      <span className="font-bold text-emerald-600">{row.support_count ?? 0} for</span>
+                      <span className="font-bold text-red-600">{row.oppose_count ?? 0} against</span>
+                      {total > 0 && <span className="ml-auto font-bold text-nyc-orange">{total} stances</span>}
                     </div>
                   </Link>
                 )
@@ -416,20 +390,20 @@ export default async function HomePage() {
 
           {/* ── Sign-in CTA ───────────────────────────────────────────── */}
           <section className="mx-auto max-w-7xl px-4 pb-10 sm:px-6 lg:px-8">
-            <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-8 text-center">
-              <p className="text-base text-slate-300">
+            <div className="rounded border-l-4 border-nyc-orange bg-nyc-blue/20 p-8 text-center">
+              <p className="text-base font-semibold text-white">
                 Join to follow legislation, track your council member, and connect with fellow New Yorkers.
               </p>
               <div className="mt-5 flex items-center justify-center gap-3">
                 <Link
                   href="/login?mode=signup"
-                  className="inline-flex items-center gap-2 rounded-lg bg-indigo-500 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-400"
+                  className="inline-flex items-center gap-2 rounded bg-nyc-orange px-5 py-2.5 text-sm font-black uppercase tracking-widest text-white transition-colors hover:bg-nyc-orange-hover"
                 >
                   Sign Up
                 </Link>
                 <Link
                   href="/login"
-                  className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-5 py-2.5 text-sm font-medium text-slate-200 transition-colors hover:border-slate-600 hover:bg-slate-700"
+                  className="inline-flex items-center gap-2 rounded border border-white/30 bg-white/10 px-5 py-2.5 text-sm font-bold uppercase tracking-widest text-white transition-colors hover:border-white/50 hover:bg-white/20"
                 >
                   Sign In
                 </Link>
@@ -440,39 +414,64 @@ export default async function HomePage() {
           {/* ── Recently Introduced ───────────────────────────────────── */}
           <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-6 lg:px-8">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-base font-semibold text-slate-200">Recently Introduced</h2>
-              <Link href="/legislation" className="text-xs text-indigo-400 hover:underline">
+              <h2 className="border-l-4 border-nyc-orange pl-3 text-xs font-black uppercase tracking-widest text-white">Recently Introduced</h2>
+              <Link href="/legislation" className="text-xs font-bold text-nyc-orange hover:underline">
                 View all →
               </Link>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {(recent ?? []).map((item) => (
-                <Link
-                  key={item.id}
-                  href={`/legislation/${item.slug}`}
-                  className="block rounded-xl border border-slate-800 bg-slate-900/60 p-4 transition-colors hover:border-slate-700 hover:bg-slate-800/60"
-                >
-                  <div className="mb-2 flex items-center gap-2">
-                    <span className={`rounded-full px-2 py-0.5 text-xs ${getStatusStyle(item.status)}`}>
-                      {item.status}
-                    </span>
-                    <span className="font-mono text-xs text-slate-500">{item.file_number}</span>
-                    {item.intro_date && (
-                      <span className="ml-auto text-xs text-slate-600">
-                        {format(new Date(item.intro_date), 'MMM d')}
-                      </span>
-                    )}
-                  </div>
-                  <p className="line-clamp-2 text-sm text-slate-300">{item.title}</p>
-                  {item.ai_summary && (
-                    <p className="mt-1.5 line-clamp-2 text-xs text-slate-500">{item.ai_summary}</p>
-                  )}
-                </Link>
+                <MiniCard key={item.id} item={item} showDate showSummary />
               ))}
             </div>
           </section>
         </>
       )}
     </main>
+  )
+}
+
+function MiniCard({
+  item,
+  showDate = false,
+  showSummary = false,
+}: {
+  item: LegislationRow
+  showDate?: boolean
+  showSummary?: boolean
+}) {
+  const s = item.status?.toLowerCase() ?? ''
+  const statusClass =
+    s.includes('enact') || s.includes('adopt') || s.includes('pass')
+      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+      : s.includes('veto') || s.includes('fail') || s.includes('withdrawn')
+      ? 'bg-red-50 text-red-700 border border-red-200'
+      : s.includes('hearing')
+      ? 'bg-blue-50 text-nyc-blue border border-blue-200'
+      : s.includes('committee')
+      ? 'bg-orange-50 text-orange-700 border border-orange-200'
+      : 'bg-slate-100 text-nyc-muted border border-nyc-border'
+
+  return (
+    <Link
+      href={`/legislation/${item.slug}`}
+      className="block rounded border border-nyc-border bg-nyc-card p-4 transition-colors hover:border-nyc-border-light hover:bg-nyc-card-hover"
+    >
+      <div className="mb-2 flex items-center gap-2">
+        <span className={`rounded px-2 py-0.5 text-xs font-bold uppercase tracking-wide ${statusClass}`}>
+          {item.status}
+        </span>
+        <span className="font-mono text-xs text-nyc-muted">{item.file_number}</span>
+        {showDate && item.intro_date && (
+          <span className="ml-auto text-xs text-nyc-muted">
+            {format(new Date(item.intro_date), 'MMM d')}
+          </span>
+        )}
+      </div>
+      <p className="line-clamp-2 text-sm font-semibold text-nyc-blue">{item.title}</p>
+      {showSummary && item.ai_summary && (
+        <p className="mt-1.5 line-clamp-2 text-xs text-nyc-muted">{item.ai_summary}</p>
+      )}
+    </Link>
   )
 }

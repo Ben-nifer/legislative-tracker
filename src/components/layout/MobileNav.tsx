@@ -25,7 +25,6 @@ export default function MobileNav({
 }) {
   const [open, setOpen] = useState(false)
 
-  // Lock body scroll when drawer is open
   useEffect(() => {
     document.body.style.overflow = open ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
@@ -35,52 +34,47 @@ export default function MobileNav({
 
   return (
     <>
-      {/* Hamburger button — mobile only */}
       <button
         onClick={() => setOpen(true)}
-        className="sm:hidden flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-100 transition-colors"
+        className="sm:hidden flex h-9 w-9 items-center justify-center rounded-lg text-white hover:bg-white/10 transition-colors"
         aria-label="Open menu"
       >
         <Menu size={20} />
       </button>
 
-      {/* Backdrop */}
       {open && (
         <div
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm sm:hidden"
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm sm:hidden"
           onClick={close}
         />
       )}
 
-      {/* Drawer */}
       <div
         className={[
-          'fixed inset-y-0 left-0 z-50 w-72 bg-slate-900 border-r border-slate-800 flex flex-col transition-transform duration-300 ease-in-out sm:hidden',
+          'fixed inset-y-0 left-0 z-50 w-72 bg-nyc-card border-r border-nyc-border flex flex-col transition-transform duration-300 ease-in-out sm:hidden',
           open ? 'translate-x-0' : '-translate-x-full',
         ].join(' ')}
       >
-        {/* Drawer header */}
-        <div className="flex items-center justify-between border-b border-slate-800 px-4 py-4">
+        <div className="flex items-center justify-between border-b border-nyc-border px-4 py-4">
           <Link
             href="/"
             onClick={close}
-            className="flex items-center gap-2 text-sm font-semibold text-white"
+            className="flex items-center gap-2"
           >
-            <Scale size={18} className="text-indigo-400" />
-            NYC Legislative Tracker
+            <Scale size={18} className="text-nyc-orange" />
+            <span className="text-sm font-black uppercase tracking-widest text-nyc-blue">NYC Tracker</span>
           </Link>
           <button
             onClick={close}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-slate-100 transition-colors"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-nyc-muted hover:bg-nyc-blue hover:text-white transition-colors"
             aria-label="Close menu"
           >
             <X size={18} />
           </button>
         </div>
 
-        {/* Nav links */}
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-          <p className="px-2 pb-1 text-xs font-medium uppercase tracking-wide text-slate-600">
+          <p className="px-2 pb-1 text-xs font-black uppercase tracking-widest text-nyc-orange">
             Browse
           </p>
           {NAV_LINKS.map((link) => (
@@ -88,7 +82,7 @@ export default function MobileNav({
               key={link.href}
               href={link.href}
               onClick={close}
-              className="block rounded-lg px-3 py-2.5 text-sm text-slate-300 transition-colors hover:bg-slate-800 hover:text-white"
+              className="block rounded-lg px-3 py-2.5 text-sm text-nyc-muted transition-colors hover:bg-nyc-blue hover:text-white"
             >
               {link.label}
             </Link>
@@ -97,7 +91,7 @@ export default function MobileNav({
           {isLoggedIn && (
             <>
               <div className="pt-3">
-                <p className="px-2 pb-1 text-xs font-medium uppercase tracking-wide text-slate-600">
+                <p className="px-2 pb-1 text-xs font-black uppercase tracking-widest text-nyc-orange">
                   My Account
                 </p>
               </div>
@@ -105,7 +99,7 @@ export default function MobileNav({
                 <Link
                   href={`/users/${username}`}
                   onClick={close}
-                  className="block rounded-lg px-3 py-2.5 text-sm text-slate-300 transition-colors hover:bg-slate-800 hover:text-white"
+                  className="block rounded-lg px-3 py-2.5 text-sm text-nyc-muted transition-colors hover:bg-nyc-blue hover:text-white"
                 >
                   Profile
                 </Link>
@@ -115,7 +109,7 @@ export default function MobileNav({
                   key={link.href}
                   href={link.href}
                   onClick={close}
-                  className="block rounded-lg px-3 py-2.5 text-sm text-slate-300 transition-colors hover:bg-slate-800 hover:text-white"
+                  className="block rounded-lg px-3 py-2.5 text-sm text-nyc-muted transition-colors hover:bg-nyc-blue hover:text-white"
                 >
                   {link.label}
                 </Link>
@@ -124,13 +118,12 @@ export default function MobileNav({
           )}
         </nav>
 
-        {/* Bottom: sign-in if logged out */}
         {!isLoggedIn && (
-          <div className="border-t border-slate-800 px-4 py-4">
+          <div className="border-t border-nyc-border px-4 py-4">
             <Link
               href="/login"
               onClick={close}
-              className="block w-full rounded-lg bg-indigo-500 px-4 py-2.5 text-center text-sm font-medium text-white transition-colors hover:bg-indigo-400"
+              className="block w-full rounded-lg bg-nyc-orange px-4 py-2.5 text-center text-sm font-bold text-white transition-colors hover:bg-nyc-orange-hover"
             >
               Sign in
             </Link>

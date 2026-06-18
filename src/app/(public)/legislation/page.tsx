@@ -3,8 +3,9 @@ import LegislationCard, {
   type LegislationCardData,
 } from '@/components/legislation/LegislationCard'
 import LegislationFilters from '@/components/legislation/LegislationFilters'
-import { FileText } from 'lucide-react'
+import { FileText, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Suspense } from 'react'
+import Link from 'next/link'
 
 export const metadata = {
   title: 'Browse Legislation | NYC Legislative Tracker',
@@ -13,6 +14,8 @@ export const metadata = {
 
 // Don't cache filtered results — each URL is unique
 export const revalidate = 0
+
+const PAGE_SIZE = 12
 
 type Filters = {
   q?: string
@@ -50,10 +53,15 @@ async function getFilterOptions() {
   return { statuses, committees: committeeRows ?? [] }
 }
 
-async function getLegislation(filters: Filters): Promise<LegislationCardData[]> {
+async function getLegislation(
+  filters: Filters,
+  page: number
+): Promise<{ items: LegislationCardData[]; total: number }> {
   const supabase = await createServerSupabaseClient()
 
   const sortByEngagement = !filters.sort || filters.sort === 'most_engaged'
+  const from = (page - 1) * PAGE_SIZE
+  const to = from + PAGE_SIZE - 1
 
   let query = supabase
     .from('legislation')
@@ -83,10 +91,11 @@ async function getLegislation(filters: Filters): Promise<LegislationCardData[]> 
         is_primary,
         legislator:legislators(full_name, slug)
       )
-    `
+    `,
+      { count: 'exact' }
     )
     .eq('type', 'introduction')
-    .limit(60)
+    .range(from, to)
 
   if (sortByEngagement) {
     query = query.order('trending_score', { referencedTable: 'legislation_stats', ascending: false, nullsFirst: false })
@@ -96,7 +105,7 @@ async function getLegislation(filters: Filters): Promise<LegislationCardData[]> 
 
   if (filters.q) {
     query = query.or(
-      `title.ilike.%${filters.q}%,ai_summary.ilike.%${filters.q}%,official_summary.ilike.%${filters.q}%`
+      `title.ilike.%${filters.q}%,ai_summary.ilike.%${filters.q}%,official_summary.ilike.%${filters.q}%,file_number.ilike.%${filters.q}%`
     )
   }
 
@@ -108,14 +117,14 @@ async function getLegislation(filters: Filters): Promise<LegislationCardData[]> 
     query = query.eq('committee_id', filters.committee_id)
   }
 
-  const { data, error } = await query
+  const { data, error, count } = await query
 
   if (error) {
     console.error('Error fetching legislation:', error.message)
-    return []
+    return { items: [], total: 0 }
   }
 
-  return (data ?? []).map((row) => {
+  const items = (data ?? []).map((row) => {
     const primarySponsorship = (row.sponsorships ?? []).find((s) => s.is_primary)
     const primaryLegislator = primarySponsorship
       ? Array.isArray(primarySponsorship.legislator)
@@ -151,12 +160,28 @@ async function getLegislation(filters: Filters): Promise<LegislationCardData[]> 
       primary_sponsor_slug: primaryLegislator?.slug ?? null,
     }
   })
+
+  return { items, total: count ?? 0 }
+}
+
+function buildPageUrl(
+  filters: Filters,
+  page: number
+): string {
+  const params = new URLSearchParams()
+  if (filters.q) params.set('q', filters.q)
+  if (filters.status) params.set('status', filters.status)
+  if (filters.committee_id) params.set('committee_id', filters.committee_id)
+  if (filters.sort && filters.sort !== 'most_engaged') params.set('sort', filters.sort)
+  if (page > 1) params.set('page', String(page))
+  const qs = params.toString()
+  return qs ? `?${qs}` : '/legislation'
 }
 
 export default async function LegislationPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; committee_id?: string; sort?: string }>
+  searchParams: Promise<{ q?: string; status?: string; committee_id?: string; sort?: string; page?: string }>
 }) {
   const params = await searchParams
   const filters: Filters = {
@@ -165,26 +190,28 @@ export default async function LegislationPage({
     committee_id: params.committee_id,
     sort: params.sort,
   }
+  const currentPage = Math.max(1, Number(params.page) || 1)
 
-  const [legislation, { statuses, committees }] = await Promise.all([
-    getLegislation(filters),
+  const [{ items: legislation, total }, { statuses, committees }] = await Promise.all([
+    getLegislation(filters, currentPage),
     getFilterOptions(),
   ])
 
+  const totalPages = Math.ceil(total / PAGE_SIZE)
   const hasFilters = Object.values(filters).some(Boolean)
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100">
+    <main className="min-h-screen bg-nyc-bg text-white">
       {/* Page header */}
-      <div className="border-b border-slate-800 bg-slate-900/60 px-4 py-8 sm:px-6 lg:px-8">
+      <div className="border-b border-nyc-border bg-nyc-blue px-4 py-8 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
           <div className="flex items-center gap-3">
-            <FileText className="text-indigo-400" size={28} />
+            <FileText className="text-nyc-orange" size={28} />
             <div>
-              <h1 className="text-2xl font-bold text-slate-100">
+              <h1 className="text-2xl font-black uppercase tracking-widest text-white">
                 NYC Council Legislation
               </h1>
-              <p className="mt-0.5 text-sm text-slate-400">
+              <p className="mt-0.5 text-sm text-nyc-muted">
                 Browse bills introduced in the New York City Council
               </p>
             </div>
@@ -198,10 +225,11 @@ export default async function LegislationPage({
           </div>
 
           {/* Result count */}
-          <p className="mt-4 text-xs text-slate-500">
+          <p className="mt-4 text-xs text-nyc-muted">
             {hasFilters
-              ? `${legislation.length} result${legislation.length === 1 ? '' : 's'} found`
-              : `Showing ${legislation.length} most recently introduced items`}
+              ? `${total} result${total === 1 ? '' : 's'} found`
+              : `${total} bill${total === 1 ? '' : 's'} total`}
+            {totalPages > 1 && ` · page ${currentPage} of ${totalPages}`}
           </p>
         </div>
       </div>
@@ -211,11 +239,48 @@ export default async function LegislationPage({
         {legislation.length === 0 ? (
           <EmptyState hasFilters={hasFilters} />
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {legislation.map((item) => (
-              <LegislationCard key={item.id} legislation={item} />
-            ))}
-          </div>
+          <>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {legislation.map((item) => (
+                <LegislationCard key={item.id} legislation={item} />
+              ))}
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="mt-10 flex items-center justify-center gap-3">
+                {currentPage > 1 ? (
+                  <Link
+                    href={buildPageUrl(filters, currentPage - 1)}
+                    className="flex items-center gap-1.5 rounded border border-nyc-border-light bg-nyc-card px-4 py-2 text-sm font-bold text-nyc-muted transition-colors hover:border-nyc-orange hover:text-white"
+                  >
+                    <ChevronLeft size={15} /> Previous
+                  </Link>
+                ) : (
+                  <span className="flex items-center gap-1.5 rounded border border-nyc-border px-4 py-2 text-sm text-nyc-border-light cursor-not-allowed">
+                    <ChevronLeft size={15} /> Previous
+                  </span>
+                )}
+
+                <span className="text-sm font-bold text-nyc-muted">
+                  {currentPage} / {totalPages}
+                </span>
+
+                {currentPage < totalPages ? (
+                  <Link
+                    href={buildPageUrl(filters, currentPage + 1)}
+                    className="flex items-center gap-1.5 rounded border border-nyc-border-light bg-nyc-card px-4 py-2 text-sm font-bold text-nyc-muted transition-colors hover:border-nyc-orange hover:text-white"
+                  >
+                    Next <ChevronRight size={15} />
+                  </Link>
+                ) : (
+                  <span className="flex items-center gap-1.5 rounded border border-nyc-border px-4 py-2 text-sm text-nyc-border-light cursor-not-allowed">
+                    Next <ChevronRight size={15} />
+                  </span>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
     </main>
@@ -225,11 +290,11 @@ export default async function LegislationPage({
 function EmptyState({ hasFilters }: { hasFilters: boolean }) {
   return (
     <div className="flex flex-col items-center justify-center py-24 text-center">
-      <FileText className="mb-4 text-slate-700" size={48} />
-      <h2 className="mb-2 text-lg font-semibold text-slate-400">
+      <FileText className="mb-4 text-nyc-border" size={48} />
+      <h2 className="mb-2 text-lg font-semibold text-nyc-muted-light">
         {hasFilters ? 'No results found' : 'No legislation yet'}
       </h2>
-      <p className="max-w-sm text-sm text-slate-600">
+      <p className="max-w-sm text-sm text-nyc-muted">
         {hasFilters
           ? 'Try adjusting your filters or search term.'
           : 'Legislation will appear here once the Legistar sync has run. Check back soon.'}

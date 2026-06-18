@@ -281,7 +281,7 @@ export default function EngagementSection({
         <div>
           <div className="mb-1 flex justify-between text-xs text-slate-500">
             <span>{Math.round((stats.support_count / total) * 100)}% support</span>
-            <span>{total.toLocaleString()} responses</span>
+            <span>{total.toLocaleString()} stances</span>
           </div>
           <div className="flex h-2 overflow-hidden rounded-full bg-slate-700">
             <div className="bg-emerald-500 transition-all duration-300" style={{ width: `${(stats.support_count / total) * 100}%` }} />

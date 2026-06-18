@@ -1,22 +1,28 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* NYC Option C — White cards on deep navy */
+  --color-nyc-bg:           #001A40;  /* deep navy page bg */
+  --color-nyc-card:         #FFFFFF;  /* white card surface */
+  --color-nyc-card-hover:   #F0F6FF;  /* very light blue hover */
+  --color-nyc-border:       #C8D8F0;  /* light blue card borders */
+  --color-nyc-border-light: #A0BADE;  /* slightly stronger border */
+  --color-nyc-blue:         #003DA5;  /* NYC blue — dark, readable on white */
+  --color-nyc-blue-hover:   #0048C7;
+  --color-nyc-orange:       #FF6319;  /* orange — CTAs, accents, banners */
+  --color-nyc-orange-hover: #FF7A3D;
+  --color-nyc-muted:        #4E6B8C;  /* blue-gray — readable on white (5:1) and dark (4:1) */
+  --color-nyc-muted-light:  #8BAAD0;  /* lighter — use on dark bg only */
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root {
+  --background: #001A40;
+  --foreground: #ffffff;
 }
 
 body {
