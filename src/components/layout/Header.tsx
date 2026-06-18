@@ -31,35 +31,35 @@ export default async function Header() {
   const navLinks = user ? [...PUBLIC_NAV_LINKS, ...AUTH_NAV_LINKS] : PUBLIC_NAV_LINKS
 
   return (
-    <header className="sticky top-0 z-40 border-b border-slate-800 bg-slate-950/90 backdrop-blur">
+    <header className="sticky top-0 z-40 border-b border-nyc-border bg-nyc-bg/95 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-7xl items-center gap-6 px-4 sm:px-6 lg:px-8">
-        {/* Mobile nav drawer (button visible on mobile only) */}
         <MobileNav isLoggedIn={!!user} username={profile?.username ?? null} />
 
-        {/* Logo */}
         <Link
           href="/"
-          className="flex items-center gap-2 text-sm font-semibold text-white shrink-0"
+          className="flex items-center gap-2 shrink-0"
         >
-          <Scale size={18} className="text-indigo-400" />
-          <span className="hidden sm:inline">NYC Legislative Tracker</span>
-          <span className="sm:hidden">NYC Tracker</span>
+          <Scale size={18} className="text-nyc-orange" />
+          <span className="hidden sm:inline text-sm font-black uppercase tracking-widest text-white">
+            NYC Legislative Tracker
+          </span>
+          <span className="sm:hidden text-sm font-black uppercase tracking-widest text-white">
+            NYC Tracker
+          </span>
         </Link>
 
-        {/* Nav — desktop only */}
         <nav className="hidden sm:flex items-center gap-1">
           {navLinks.map((link) => (
             <Link
               key={link.href}
               href={link.href}
-              className="rounded-md px-3 py-1.5 text-sm text-slate-400 transition-colors hover:bg-slate-800 hover:text-slate-100"
+              className="rounded-md px-3 py-1.5 text-sm font-medium text-nyc-muted-light transition-colors hover:bg-white/10 hover:text-white"
             >
               {link.label}
             </Link>
           ))}
         </nav>
 
-        {/* Right side */}
         <div className="ml-auto flex items-center gap-3">
           {user && profile ? (
             <>
@@ -73,7 +73,7 @@ export default async function Header() {
           ) : (
             <Link
               href="/login"
-              className="rounded-lg bg-indigo-500 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-indigo-400"
+              className="rounded-lg bg-nyc-orange px-4 py-1.5 text-sm font-bold text-white transition-colors hover:bg-nyc-orange-hover"
             >
               Sign in
             </Link>

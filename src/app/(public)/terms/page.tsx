@@ -93,7 +93,7 @@ export default function TermsPage() {
           <p>
             Questions about these terms? Reach out via the{' '}
             <a
-              href="https://github.com/legislative-tracker"
+              href="https://github.com/Ben-nifer/legislative-tracker"
               target="_blank"
               rel="noopener noreferrer"
               className="text-indigo-400 hover:text-indigo-300 transition-colors"

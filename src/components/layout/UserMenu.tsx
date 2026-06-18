@@ -41,41 +41,41 @@ export default function UserMenu({
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 rounded-full border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-200 transition-colors hover:border-slate-600 hover:bg-slate-700"
+        className="flex items-center gap-2 rounded-full border border-nyc-border bg-nyc-card px-3 py-1.5 text-sm text-nyc-blue transition-colors hover:border-nyc-blue hover:bg-nyc-blue hover:text-white"
       >
         <Avatar src={avatarUrl} name={displayName} size="sm" />
         <span className="hidden sm:inline">{displayName}</span>
-        <ChevronDown size={14} className="text-slate-400" />
+        <ChevronDown size={14} className="text-nyc-muted" />
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-1.5 w-48 rounded-xl border border-slate-700 bg-slate-800 py-1 shadow-xl">
-          <p className="px-3 py-2 text-xs text-slate-500">@{username}</p>
-          <div className="my-1 border-t border-slate-700" />
+        <div className="absolute right-0 top-full z-50 mt-1.5 w-48 rounded-xl border border-nyc-border bg-nyc-card py-1 shadow-xl">
+          <p className="px-3 py-2 text-xs text-nyc-muted">@{username}</p>
+          <div className="my-1 border-t border-nyc-border" />
           <Link
             href={`/users/${username}`}
             onClick={() => setOpen(false)}
-            className="flex items-center gap-2 px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
+            className="flex items-center gap-2 px-3 py-2 text-sm text-nyc-muted transition-colors hover:bg-nyc-blue hover:text-white"
           >
             <ExternalLink size={14} /> Profile
           </Link>
           <Link
             href="/following"
             onClick={() => setOpen(false)}
-            className="flex items-center gap-2 px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
+            className="flex items-center gap-2 px-3 py-2 text-sm text-nyc-muted transition-colors hover:bg-nyc-blue hover:text-white"
           >
             <Users size={14} /> Following
           </Link>
           <Link
             href="/followers"
             onClick={() => setOpen(false)}
-            className="flex items-center gap-2 px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
+            className="flex items-center gap-2 px-3 py-2 text-sm text-nyc-muted transition-colors hover:bg-nyc-blue hover:text-white"
           >
             <Users size={14} /> Followers
           </Link>
           <button
             onClick={handleSignOut}
-            className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700 hover:text-white"
+            className="flex w-full items-center gap-2 px-3 py-2 text-sm text-nyc-muted transition-colors hover:bg-nyc-blue hover:text-white"
           >
             <LogOut size={14} /> Sign out
           </button>

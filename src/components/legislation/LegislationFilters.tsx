@@ -32,6 +32,7 @@ export default function LegislationFilters({
       } else {
         params.delete(key)
       }
+      params.delete('page')
       startTransition(() => {
         router.push(`${pathname}?${params.toString()}`, { scroll: false })
       })
@@ -47,70 +48,64 @@ export default function LegislationFilters({
 
   const hasFilters = q || status || committeeId || sort !== 'most_engaged'
 
+  const selectClass = 'rounded border border-nyc-border bg-nyc-card px-3 py-2 text-sm text-nyc-blue outline-none transition-colors focus:border-nyc-orange focus:ring-1 focus:ring-nyc-orange'
+
   return (
     <div className={`space-y-3 transition-opacity ${isPending ? 'opacity-60' : 'opacity-100'}`}>
       {/* Search input */}
       <div className="relative">
         <Search
           size={15}
-          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
+          className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-nyc-muted"
         />
         <input
           type="search"
-          placeholder="Search legislation..."
+          placeholder="Search legislation or bill number…"
           defaultValue={q}
           onChange={(e) => updateParam('q', e.target.value)}
-          className="w-full rounded-lg border border-slate-700 bg-slate-900 py-2 pl-9 pr-4 text-sm text-slate-100 placeholder-slate-500 outline-none transition-colors focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+          className="w-full rounded border border-nyc-border bg-nyc-card py-2 pl-9 pr-4 text-sm text-nyc-blue placeholder-nyc-muted outline-none transition-colors focus:border-nyc-orange focus:ring-1 focus:ring-nyc-orange"
         />
       </div>
 
       {/* Dropdowns row */}
       <div className="flex flex-wrap gap-2">
-        {/* Status filter */}
         <select
           value={status}
           onChange={(e) => updateParam('status', e.target.value)}
-          className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-300 outline-none transition-colors focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 max-w-[200px]"
+          className={`${selectClass} max-w-[200px]`}
         >
           <option value="">All Statuses</option>
           {statuses.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
+            <option key={s} value={s}>{s}</option>
           ))}
         </select>
 
-        {/* Sort order */}
         <select
           value={sort}
           onChange={(e) => updateParam('sort', e.target.value === 'most_engaged' ? '' : e.target.value)}
-          className="rounded-lg border border-indigo-500/50 bg-slate-900 px-3 py-2 text-sm text-slate-200 outline-none transition-colors focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+          className={`${selectClass} border-nyc-orange/50 text-nyc-orange`}
         >
           <option value="most_engaged">Most Engaged</option>
           <option value="most_recent">Most Recent</option>
         </select>
 
-        {/* Committee filter */}
         {committees.length > 0 && (
           <select
             value={committeeId}
             onChange={(e) => updateParam('committee_id', e.target.value)}
-            className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-300 outline-none transition-colors focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            className={selectClass}
           >
             <option value="">All Committees</option>
             {committees.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
+              <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
         )}
 
-        {/* Clear all */}
         {hasFilters && (
           <button
             onClick={clearAll}
-            className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-slate-400 transition-colors hover:border-slate-600 hover:text-slate-200"
+            className="flex items-center gap-1.5 rounded border border-nyc-border bg-nyc-card px-3 py-2 text-sm text-nyc-muted transition-colors hover:border-nyc-blue hover:bg-nyc-blue hover:text-white"
           >
             <X size={13} />
             Clear
