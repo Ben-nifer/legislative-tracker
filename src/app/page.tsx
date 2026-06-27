@@ -321,7 +321,7 @@ export default async function HomePage() {
               {trendingIntroductions.map((row) => {
                 const leg = Array.isArray(row.legislation) ? row.legislation[0] : row.legislation
                 if (!leg) return null
-                const total = (row.support_count ?? 0) + (row.oppose_count ?? 0) + (row.neutral_count ?? 0)
+                const commentCount = row.comment_count ?? 0
                 return (
                   <Link
                     key={leg.id}
@@ -338,7 +338,11 @@ export default async function HomePage() {
                     <div className="mt-2 flex items-center gap-3 text-xs">
                       <span className="font-bold text-emerald-600">{row.support_count ?? 0} for</span>
                       <span className="font-bold text-red-600">{row.oppose_count ?? 0} against</span>
-                      {total > 0 && <span className="ml-auto font-bold text-nyc-orange">{total} stances</span>}
+                      {commentCount > 0 && (
+                        <span className="ml-auto font-bold text-nyc-orange">
+                          {commentCount} {commentCount === 1 ? 'comment' : 'comments'}
+                        </span>
+                      )}
                     </div>
                   </Link>
                 )
@@ -363,7 +367,7 @@ export default async function HomePage() {
               {trendingIntroductions.map((row) => {
                 const leg = Array.isArray(row.legislation) ? row.legislation[0] : row.legislation
                 if (!leg) return null
-                const total = (row.support_count ?? 0) + (row.oppose_count ?? 0) + (row.neutral_count ?? 0)
+                const commentCount = row.comment_count ?? 0
                 return (
                   <Link
                     key={leg.id}
@@ -380,7 +384,11 @@ export default async function HomePage() {
                     <div className="mt-2 flex items-center gap-3 text-xs">
                       <span className="font-bold text-emerald-600">{row.support_count ?? 0} for</span>
                       <span className="font-bold text-red-600">{row.oppose_count ?? 0} against</span>
-                      {total > 0 && <span className="ml-auto font-bold text-nyc-orange">{total} stances</span>}
+                      {commentCount > 0 && (
+                        <span className="ml-auto font-bold text-nyc-orange">
+                          {commentCount} {commentCount === 1 ? 'comment' : 'comments'}
+                        </span>
+                      )}
                     </div>
                   </Link>
                 )

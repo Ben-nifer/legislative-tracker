@@ -22,9 +22,9 @@ export type CommentData = {
 }
 
 const STANCE_CONFIG = {
-  support:  { label: 'Support',  icon: <ThumbsUp  size={10} />, style: 'bg-emerald-500/20 text-emerald-300' },
-  oppose:   { label: 'Oppose',   icon: <ThumbsDown size={10} />, style: 'bg-red-500/20 text-red-300' },
-  neutral:  { label: 'Neutral',  icon: <Minus      size={10} />, style: 'bg-amber-500/20 text-amber-300' },
+  support:  { label: 'Support',  icon: <ThumbsUp  size={10} />, style: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
+  oppose:   { label: 'Oppose',   icon: <ThumbsDown size={10} />, style: 'bg-red-50 text-red-700 border border-red-200' },
+  neutral:  { label: 'Neutral',  icon: <Minus      size={10} />, style: 'bg-amber-50 text-amber-700 border border-amber-200' },
 }
 
 export default function CommentItem({
@@ -80,11 +80,10 @@ export default function CommentItem({
 
   const stance = comment.stance_context ? STANCE_CONFIG[comment.stance_context] : null
 
-  // Top-level gets card styling; replies stay minimal
   const isTopLevel = depth === 0
 
   return (
-    <div className={isTopLevel ? 'rounded-lg border border-slate-700/50 bg-slate-900/40' : ''}>
+    <div className={isTopLevel ? 'rounded border border-nyc-border bg-nyc-card-hover' : ''}>
       <div className="group flex gap-3 p-3">
         {/* Thread collapse line for top-level */}
         {isTopLevel ? (
@@ -93,15 +92,15 @@ export default function CommentItem({
             className="flex flex-col items-center gap-1 shrink-0"
             title={collapsed ? 'Expand thread' : 'Collapse thread'}
           >
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-500/20 text-xs font-semibold text-indigo-300">
+            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-nyc-blue/10 text-xs font-semibold text-nyc-blue">
               {initials}
             </div>
             {!collapsed && (
-              <div className="w-0.5 flex-1 min-h-[8px] rounded-full bg-slate-700 hover:bg-indigo-500/50 transition-colors" />
+              <div className="w-0.5 flex-1 min-h-[8px] rounded-full bg-nyc-border hover:bg-nyc-orange/40 transition-colors" />
             )}
           </button>
         ) : (
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-700/50 text-xs font-semibold text-slate-400">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-nyc-muted/10 text-xs font-semibold text-nyc-muted">
             {initials}
           </div>
         )}
@@ -111,11 +110,11 @@ export default function CommentItem({
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1.5">
             <Link
               href={`/users/${comment.author.username}`}
-              className="text-sm font-medium text-slate-200 hover:text-indigo-400 transition-colors"
+              className="text-sm font-medium text-nyc-blue hover:text-nyc-orange transition-colors"
             >
               {comment.author.display_name}
             </Link>
-            <span className="text-xs text-slate-600">@{comment.author.username}</span>
+            <span className="text-xs text-nyc-muted">@{comment.author.username}</span>
 
             {stance && (
               <span className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${stance.style}`}>
@@ -124,7 +123,7 @@ export default function CommentItem({
               </span>
             )}
 
-            <span className="ml-auto text-xs text-slate-600" title={new Date(comment.created_at).toLocaleString()}>
+            <span className="ml-auto text-xs text-nyc-muted/60" title={new Date(comment.created_at).toLocaleString()}>
               {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
             </span>
           </div>
@@ -133,14 +132,14 @@ export default function CommentItem({
           {collapsed ? (
             <button
               onClick={() => setCollapsed(false)}
-              className="text-xs text-slate-500 hover:text-slate-300 transition-colors italic"
+              className="text-xs text-nyc-muted hover:text-nyc-blue transition-colors italic"
             >
               Comment collapsed — click to expand
             </button>
           ) : (
             <>
               {/* Body */}
-              <p className="text-sm leading-relaxed text-slate-300 whitespace-pre-wrap break-words">
+              <p className="text-sm leading-relaxed text-nyc-blue whitespace-pre-wrap break-words">
                 {comment.body}
               </p>
 
@@ -158,7 +157,7 @@ export default function CommentItem({
                     onClick={() => setShowReply((v) => !v)}
                     className={[
                       'flex items-center gap-1 text-xs transition-colors',
-                      showReply ? 'text-indigo-400' : 'text-slate-500 hover:text-slate-300',
+                      showReply ? 'text-nyc-orange' : 'text-nyc-muted hover:text-nyc-blue',
                     ].join(' ')}
                   >
                     <MessageSquare size={13} />
@@ -169,7 +168,7 @@ export default function CommentItem({
                 {comment.replies.length > 0 && (
                   <button
                     onClick={() => setShowReplies((v) => !v)}
-                    className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+                    className="text-xs text-nyc-muted hover:text-nyc-blue transition-colors"
                   >
                     {showReplies
                       ? `Hide ${comment.replies.length} ${comment.replies.length === 1 ? 'reply' : 'replies'}`
@@ -181,12 +180,12 @@ export default function CommentItem({
                   {!reported ? (
                     <button
                       onClick={handleReport}
-                      className="flex items-center gap-1 text-xs text-slate-700 opacity-0 transition-opacity group-hover:opacity-100 hover:text-slate-500"
+                      className="flex items-center gap-1 text-xs text-nyc-muted/20 opacity-0 transition-opacity group-hover:opacity-100 hover:text-red-500"
                     >
                       <Flag size={11} /> Report
                     </button>
                   ) : (
-                    <span className="text-xs text-slate-600">Reported</span>
+                    <span className="text-xs text-nyc-muted/50">Reported</span>
                   )}
                 </div>
               </div>
@@ -208,23 +207,23 @@ export default function CommentItem({
                     rows={2}
                     maxLength={2000}
                     autoFocus
-                    className="w-full resize-none overflow-hidden rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors"
+                    className="w-full resize-none overflow-hidden rounded border border-nyc-border bg-nyc-card px-3 py-2 text-sm text-nyc-blue placeholder-nyc-muted focus:border-nyc-orange focus:outline-none focus:ring-1 focus:ring-nyc-orange/30 transition-colors"
                   />
                   <div className="flex items-center justify-between">
-                    <p className="text-xs text-slate-600">{replyBody.length}/2000 · ⌘↵ to post</p>
+                    <p className="text-xs text-nyc-muted/60">{replyBody.length}/2000 · ⌘↵ to post</p>
                     <div className="flex items-center gap-2">
-                      {replyError && <p className="text-xs text-red-400">{replyError}</p>}
+                      {replyError && <p className="text-xs text-red-500">{replyError}</p>}
                       <button
                         type="button"
                         onClick={() => { setShowReply(false); setReplyBody('') }}
-                        className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+                        className="text-xs text-nyc-muted hover:text-nyc-blue transition-colors"
                       >
                         Cancel
                       </button>
                       <button
                         type="submit"
                         disabled={replyLoading || !replyBody.trim()}
-                        className="rounded-lg bg-indigo-500 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+                        className="rounded bg-nyc-orange px-3 py-1 text-xs font-medium text-white hover:bg-nyc-orange-hover disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
                       >
                         {replyLoading ? 'Posting…' : 'Reply'}
                       </button>
@@ -239,7 +238,7 @@ export default function CommentItem({
 
       {/* Replies */}
       {!collapsed && showReplies && comment.replies.length > 0 && (
-        <div className="border-t border-slate-700/40 px-3 pb-3 space-y-0 divide-y divide-slate-700/30">
+        <div className="border-t border-nyc-border/40 px-3 pb-3 space-y-0 divide-y divide-nyc-border/30">
           {comment.replies.map((reply) => (
             <div key={reply.id} className="pt-3">
               <CommentItem

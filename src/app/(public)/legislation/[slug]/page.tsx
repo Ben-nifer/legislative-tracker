@@ -171,13 +171,24 @@ async function getLegislation(slug: string): Promise<LegislationDetail | null> {
 // Metadata
 // ---------------------------------------------------------------------------
 
+function isValidSummary(text: string | null | undefined): boolean {
+  if (!text || text.trim().length < 20) return false
+  if (/^\d+$/.test(text.trim())) return false
+  return true
+}
+
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
   const legislation = await getLegislation(slug)
   if (!legislation) return { title: 'Not Found' }
+  const summary = isValidSummary(legislation.ai_summary)
+    ? legislation.ai_summary
+    : isValidSummary(legislation.official_summary)
+    ? legislation.official_summary
+    : null
   return {
     title: `${legislation.file_number} | NYC Legislative Tracker`,
-    description: legislation.ai_summary ?? legislation.official_summary ?? legislation.title,
+    description: summary ?? legislation.title,
   }
 }
 
@@ -188,14 +199,14 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 function getStatusStyle(status: string) {
   const s = status.toLowerCase()
   if (s.includes('enact') || s.includes('adopt') || s.includes('pass'))
-    return { bg: 'bg-emerald-500/20', text: 'text-emerald-300', dot: 'bg-emerald-400' }
+    return { bg: 'bg-emerald-50', text: 'text-emerald-700', dot: 'bg-emerald-500', border: 'border border-emerald-200' }
   if (s.includes('veto') || s.includes('fail') || s.includes('withdrawn'))
-    return { bg: 'bg-red-500/20', text: 'text-red-300', dot: 'bg-red-400' }
+    return { bg: 'bg-red-50', text: 'text-red-700', dot: 'bg-red-500', border: 'border border-red-200' }
   if (s.includes('hearing'))
-    return { bg: 'bg-blue-500/20', text: 'text-blue-300', dot: 'bg-blue-400' }
+    return { bg: 'bg-blue-50', text: 'text-nyc-blue', dot: 'bg-blue-500', border: 'border border-blue-200' }
   if (s.includes('committee'))
-    return { bg: 'bg-amber-500/20', text: 'text-amber-300', dot: 'bg-amber-400' }
-  return { bg: 'bg-slate-500/20', text: 'text-slate-300', dot: 'bg-slate-400' }
+    return { bg: 'bg-orange-50', text: 'text-orange-700', dot: 'bg-orange-500', border: 'border border-orange-200' }
+  return { bg: 'bg-slate-50', text: 'text-nyc-muted', dot: 'bg-nyc-muted', border: 'border border-nyc-border' }
 }
 
 function fmt(dateStr: string | null) {
@@ -260,19 +271,24 @@ export default async function LegislationDetailPage({
   }
 
   const statusStyle = getStatusStyle(legislation.status)
-  const summary = legislation.ai_summary ?? legislation.official_summary
+  const summary = isValidSummary(legislation.ai_summary)
+    ? legislation.ai_summary
+    : isValidSummary(legislation.official_summary)
+    ? legislation.official_summary
+    : null
   const primarySponsor = legislation.sponsors.find((s) => s.is_primary)
   const coSponsors = legislation.sponsors.filter((s) => !s.is_primary)
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100">
+    <main className="min-h-screen bg-nyc-bg">
       <ViewLogger legislationId={legislation.id} />
+
       {/* Back nav */}
-      <div className="border-b border-slate-800 bg-slate-900/60 px-4 py-3 sm:px-6 lg:px-8">
+      <div className="border-b border-white/10 bg-nyc-blue px-4 py-3 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-4xl">
           <Link
             href="/legislation"
-            className="inline-flex items-center gap-1.5 text-sm text-slate-400 transition-colors hover:text-slate-200"
+            className="inline-flex items-center gap-1.5 text-sm text-blue-200 transition-colors hover:text-white"
           >
             <ArrowLeft size={14} /> All Legislation
           </Link>
@@ -280,37 +296,37 @@ export default async function LegislationDetailPage({
       </div>
 
       <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="space-y-6">
+        <div className="space-y-4">
 
           {/* ── Header ─────────────────────────────────────────────── */}
-          <section>
+          <section className="rounded border border-nyc-border bg-nyc-card p-5">
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <span
-                className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${statusStyle.bg} ${statusStyle.text}`}
+                className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-bold uppercase tracking-wide ${statusStyle.bg} ${statusStyle.text} ${statusStyle.border}`}
               >
                 <span className={`h-1.5 w-1.5 rounded-full ${statusStyle.dot}`} />
                 {legislation.status}
               </span>
-              <span className="font-mono text-sm text-slate-400">
+              <span className="font-mono text-sm text-nyc-muted">
                 {legislation.file_number}
               </span>
-              <span className="rounded-full border border-slate-700 px-2.5 py-0.5 text-xs capitalize text-slate-400">
+              <span className="rounded border border-nyc-border px-2.5 py-0.5 text-xs capitalize text-nyc-muted">
                 {legislation.type}
               </span>
             </div>
 
-            <h1 className="text-2xl font-bold leading-snug text-slate-100 sm:text-3xl">
+            <h1 className="text-2xl font-bold leading-snug text-nyc-blue sm:text-3xl">
               {legislation.title}
             </h1>
 
             {legislation.intro_date && (
-              <p className="mt-2 text-sm text-slate-500">
+              <p className="mt-2 text-sm text-nyc-muted">
                 Introduced {fmt(legislation.intro_date)}
                 {primarySponsor && (
                   <> by{' '}
                     <Link
                       href={`/council-members/${primarySponsor.slug}`}
-                      className="text-indigo-400 hover:underline"
+                      className="text-nyc-orange hover:underline"
                     >
                       {primarySponsor.full_name}
                     </Link>
@@ -321,66 +337,68 @@ export default async function LegislationDetailPage({
           </section>
 
           {/* ── Summary ────────────────────────────────────────────── */}
-          <section className="rounded-xl border border-slate-700/60 bg-slate-800/80 p-5">
-            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
+          <section className="rounded border border-nyc-border bg-nyc-card p-5">
+            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-nyc-muted">
               <FileText size={14} /> Summary
             </h2>
             {summary ? (
               <>
-                <p className="leading-relaxed text-slate-200">{summary}</p>
-                {legislation.ai_summary && (
-                  <p className="mt-2 text-xs text-slate-600">
+                <p className="leading-relaxed text-nyc-blue">{summary}</p>
+                {legislation.ai_summary && isValidSummary(legislation.ai_summary) && (
+                  <p className="mt-2 text-xs text-nyc-muted/60">
                     AI-generated summary &mdash; may not reflect official language
                   </p>
                 )}
               </>
             ) : (
-              <p className="text-sm italic text-slate-500">No summary available yet.</p>
+              <p className="text-sm italic text-nyc-muted">No summary available yet.</p>
             )}
 
-            {legislation.full_text_url && (
-              <a
-                href={legislation.full_text_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-4 inline-flex items-center gap-1.5 rounded-md border border-slate-600 px-3 py-1.5 text-xs text-slate-300 transition-colors hover:border-slate-400 hover:text-slate-100"
-              >
-                <ExternalLink size={12} /> Read Full Bill Text
-              </a>
-            )}
-            {legislation.legistar_url && (
-              <a
-                href={legislation.legistar_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="ml-2 mt-4 inline-flex items-center gap-1.5 rounded-md border border-slate-600 px-3 py-1.5 text-xs text-slate-300 transition-colors hover:border-slate-400 hover:text-slate-100"
-              >
-                <ExternalLink size={12} /> View on Legistar
-              </a>
-            )}
+            <div className="mt-4 flex flex-wrap gap-2">
+              {legislation.full_text_url && (
+                <a
+                  href={legislation.full_text_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded border border-nyc-border px-3 py-1.5 text-xs text-nyc-muted transition-colors hover:border-nyc-border-light hover:text-nyc-blue"
+                >
+                  <ExternalLink size={12} /> Read Full Bill Text
+                </a>
+              )}
+              {legislation.legistar_url && (
+                <a
+                  href={legislation.legistar_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded border border-nyc-border px-3 py-1.5 text-xs text-nyc-muted transition-colors hover:border-nyc-border-light hover:text-nyc-blue"
+                >
+                  <ExternalLink size={12} /> View on Legistar
+                </a>
+              )}
+            </div>
           </section>
 
           {/* ── Two-col: Sponsors + Details ─────────────────────────── */}
           <div className="grid gap-4 sm:grid-cols-2">
 
             {/* Sponsors */}
-            <section className="rounded-xl border border-slate-700/60 bg-slate-800/80 p-5">
-              <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
+            <section className="rounded border border-nyc-border bg-nyc-card p-5">
+              <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-nyc-muted">
                 <User size={14} /> Sponsors
               </h2>
               {legislation.sponsors.length === 0 ? (
-                <p className="text-sm italic text-slate-500">No sponsors listed.</p>
+                <p className="text-sm italic text-nyc-muted">No sponsors listed.</p>
               ) : (
                 <ul className="space-y-2">
                   {primarySponsor && (
                     <li className="flex items-center justify-between">
                       <Link
                         href={`/council-members/${primarySponsor.slug}`}
-                        className="text-sm font-medium text-indigo-400 hover:underline"
+                        className="text-sm font-medium text-nyc-orange hover:underline"
                       >
                         {primarySponsor.full_name}
                       </Link>
-                      <span className="rounded-full bg-indigo-500/20 px-2 py-0.5 text-xs text-indigo-300">
+                      <span className="rounded border border-nyc-orange/30 bg-nyc-orange/10 px-2 py-0.5 text-xs text-nyc-orange">
                         Primary
                       </span>
                     </li>
@@ -389,12 +407,12 @@ export default async function LegislationDetailPage({
                     <li key={s.slug} className="flex items-center justify-between">
                       <Link
                         href={`/council-members/${s.slug}`}
-                        className="text-sm text-slate-300 hover:text-indigo-400 hover:underline"
+                        className="text-sm text-nyc-blue hover:text-nyc-orange hover:underline"
                       >
                         {s.full_name}
                       </Link>
                       {s.district && (
-                        <span className="text-xs text-slate-600">Dist. {s.district}</span>
+                        <span className="text-xs text-nyc-muted">Dist. {s.district}</span>
                       )}
                     </li>
                   ))}
@@ -403,27 +421,27 @@ export default async function LegislationDetailPage({
             </section>
 
             {/* Bill details */}
-            <section className="rounded-xl border border-slate-700/60 bg-slate-800/80 p-5">
-              <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
+            <section className="rounded border border-nyc-border bg-nyc-card p-5">
+              <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-nyc-muted">
                 <Building2 size={14} /> Details
               </h2>
               <dl className="space-y-2 text-sm">
                 {legislation.committee_name && (
                   <div className="flex justify-between gap-2">
-                    <dt className="text-slate-500">Committee</dt>
-                    <dd className="text-right text-slate-300">{legislation.committee_name}</dd>
+                    <dt className="text-nyc-muted">Committee</dt>
+                    <dd className="text-right text-nyc-blue">{legislation.committee_name}</dd>
                   </div>
                 )}
                 {legislation.intro_date && (
                   <div className="flex justify-between gap-2">
-                    <dt className="text-slate-500">Introduced</dt>
-                    <dd className="text-slate-300">{fmt(legislation.intro_date)}</dd>
+                    <dt className="text-nyc-muted">Introduced</dt>
+                    <dd className="text-nyc-blue">{fmt(legislation.intro_date)}</dd>
                   </div>
                 )}
                 {legislation.last_action_date && (
                   <div className="flex justify-between gap-2">
-                    <dt className="text-slate-500">Last Action</dt>
-                    <dd className="text-slate-300">{fmt(legislation.last_action_date)}</dd>
+                    <dt className="text-nyc-muted">Last Action</dt>
+                    <dd className="text-nyc-blue">{fmt(legislation.last_action_date)}</dd>
                   </div>
                 )}
               </dl>
@@ -432,37 +450,37 @@ export default async function LegislationDetailPage({
 
           {/* ── Upcoming Hearings ───────────────────────────────────── */}
           {legislation.upcoming_hearings.length > 0 && (
-            <section className="rounded-xl border border-blue-500/30 bg-blue-500/5 p-5">
-              <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-blue-400">
+            <section className="rounded border border-blue-200 bg-blue-50 p-5">
+              <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-nyc-blue">
                 <Calendar size={14} /> Upcoming Hearings
               </h2>
               <ul className="space-y-3">
                 {legislation.upcoming_hearings.map((hearing) => (
                   <li key={hearing.id} className="flex items-start gap-3">
-                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/20 text-blue-400">
+                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded bg-nyc-blue/10 text-nyc-blue">
                       <Calendar size={14} />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-slate-200">
+                      <p className="text-sm font-medium text-nyc-blue">
                         {hearing.event_type ?? 'Hearing'}
                       </p>
                       {hearing.event_date && (
-                        <p className="text-xs text-slate-400">
+                        <p className="text-xs text-nyc-muted">
                           {format(new Date(hearing.event_date), 'EEEE, MMM d, yyyy · h:mm a')}
-                          <span className="ml-1 text-slate-600">
+                          <span className="ml-1 text-nyc-muted/60">
                             ({formatDistanceToNow(new Date(hearing.event_date), { addSuffix: true })})
                           </span>
                         </p>
                       )}
                       {hearing.location && (
-                        <p className="text-xs text-slate-500">{hearing.location}</p>
+                        <p className="text-xs text-nyc-muted">{hearing.location}</p>
                       )}
                       {hearing.video_url && (
                         <a
                           href={hearing.video_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="mt-1 inline-flex items-center gap-1 text-xs text-blue-400 hover:underline"
+                          className="mt-1 inline-flex items-center gap-1 text-xs text-nyc-orange hover:underline"
                         >
                           Watch live <ExternalLink size={10} />
                         </a>
@@ -475,8 +493,8 @@ export default async function LegislationDetailPage({
           )}
 
           {/* ── Engagement ──────────────────────────────────────────── */}
-          <section className="rounded-xl border border-slate-700/60 bg-slate-800/80 p-5">
-            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-400">
+          <section className="rounded border border-nyc-border bg-nyc-card p-5">
+            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-nyc-muted">
               Public Engagement
             </h2>
             <EngagementSection
@@ -491,23 +509,23 @@ export default async function LegislationDetailPage({
 
           {/* ── Action history ──────────────────────────────────────── */}
           {legislation.history.length > 0 && (
-            <section className="rounded-xl border border-slate-700/60 bg-slate-800/80 p-5">
-              <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
+            <section className="rounded border border-nyc-border bg-nyc-card p-5">
+              <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-nyc-muted">
                 <Clock size={14} /> History
               </h2>
-              <ol className="relative border-l border-slate-700 pl-5 space-y-4">
+              <ol className="relative border-l border-nyc-border pl-5 space-y-4">
                 {legislation.history.map((item, i) => (
                   <li key={item.id} className="relative">
                     <span
-                      className={`absolute -left-[21px] flex h-3 w-3 items-center justify-center rounded-full border-2 border-slate-950 ${
-                        i === 0 ? 'bg-indigo-400' : 'bg-slate-600'
+                      className={`absolute -left-[21px] flex h-3 w-3 items-center justify-center rounded-full border-2 border-nyc-card ${
+                        i === 0 ? 'bg-nyc-orange' : 'bg-nyc-muted/40'
                       }`}
                     />
-                    <p className="text-sm text-slate-200">
+                    <p className="text-sm text-nyc-blue">
                       {item.action_text ?? 'Action recorded'}
                     </p>
                     {item.action_date && (
-                      <p className="mt-0.5 text-xs text-slate-500">
+                      <p className="mt-0.5 text-xs text-nyc-muted">
                         {fmt(item.action_date)}
                         <span className="ml-1.5">
                           · {formatDistanceToNow(new Date(item.action_date), { addSuffix: true })}
@@ -521,7 +539,7 @@ export default async function LegislationDetailPage({
           )}
 
           {/* ── Comments ────────────────────────────────────────────── */}
-          <div className="rounded-xl border border-slate-700/60 bg-slate-800/80 p-5">
+          <div className="rounded border border-nyc-border bg-nyc-card p-5">
             <CommentThread legislationId={legislation.id} />
           </div>
 
@@ -530,4 +548,3 @@ export default async function LegislationDetailPage({
     </main>
   )
 }
-

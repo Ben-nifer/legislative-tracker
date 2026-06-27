@@ -15,6 +15,10 @@
     {
       "path": "/api/cron/sync-council",
       "schedule": "0 2 * * 1"
+    },
+    {
+      "path": "/api/cron/summarize-legislation",
+      "schedule": "0 4 * * *"
     }
   ]
 }

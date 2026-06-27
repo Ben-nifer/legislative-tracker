@@ -59,25 +59,24 @@ function LoginForm() {
       setLoading(false)
       setError(error.message)
     }
-    // On success, browser redirects — no need to setLoading(false)
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4">
+    <div className="min-h-screen bg-nyc-bg flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         {/* Logo / Title */}
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-white">Legislative Tracker</h1>
-          <p className="text-slate-400 mt-1 text-sm">
+          <h1 className="text-2xl font-black uppercase tracking-widest text-white">NYC Legislative Tracker</h1>
+          <p className="text-nyc-muted-light mt-1 text-sm">
             Track NYC legislation that matters to you
           </p>
         </div>
 
-        <div className="bg-slate-800/80 backdrop-blur rounded-xl border border-slate-700 p-6 space-y-5">
-          <h2 className="text-lg font-semibold text-white">Sign in</h2>
+        <div className="bg-nyc-card rounded border border-nyc-border p-6 space-y-5">
+          <h2 className="text-lg font-bold text-nyc-blue">Sign in</h2>
 
           {authError === 'auth_failed' && (
-            <p className="text-sm text-red-400 bg-red-500/10 rounded-lg px-3 py-2">
+            <p className="text-sm text-red-600 bg-red-50 rounded border border-red-200 px-3 py-2">
               Authentication failed. Please try again.
             </p>
           )}
@@ -86,7 +85,7 @@ function LoginForm() {
           <button
             onClick={handleGoogleLogin}
             disabled={loading}
-            className="w-full flex items-center justify-center gap-3 px-4 py-2.5 rounded-lg border border-slate-600 bg-slate-700/50 text-white text-sm font-medium hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full flex items-center justify-center gap-3 px-4 py-2.5 rounded border border-nyc-border bg-nyc-card text-nyc-blue text-sm font-medium hover:bg-nyc-card-hover hover:border-nyc-border-light transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <GoogleIcon />
             Continue with Google
@@ -94,25 +93,25 @@ function LoginForm() {
 
           {/* Divider */}
           <div className="flex items-center gap-3">
-            <div className="flex-1 h-px bg-slate-700" />
-            <span className="text-xs text-slate-500">or</span>
-            <div className="flex-1 h-px bg-slate-700" />
+            <div className="flex-1 h-px bg-nyc-border" />
+            <span className="text-xs text-nyc-muted">or</span>
+            <div className="flex-1 h-px bg-nyc-border" />
           </div>
 
           {/* Magic Link */}
           {sent ? (
             <div className="text-center space-y-2">
               <div className="text-2xl">📬</div>
-              <p className="text-white font-medium text-sm">Check your email</p>
-              <p className="text-slate-400 text-sm">
+              <p className="text-nyc-blue font-medium text-sm">Check your email</p>
+              <p className="text-nyc-muted text-sm">
                 We sent a magic link from{' '}
-                <span className="text-slate-300">noreply@legislative-tracker.com</span>{' '}
-                to <span className="text-white">{email}</span>.
+                <span className="text-nyc-blue">noreply@legislative-tracker.com</span>{' '}
+                to <span className="text-nyc-blue font-medium">{email}</span>.
                 Check your spam folder if it doesn&apos;t arrive within a minute.
               </p>
               <button
                 onClick={() => setSent(false)}
-                className="text-indigo-400 hover:text-indigo-300 text-sm transition-colors"
+                className="text-nyc-orange hover:underline text-sm transition-colors"
               >
                 Use a different email
               </button>
@@ -120,7 +119,7 @@ function LoginForm() {
           ) : (
             <form onSubmit={handleMagicLink} className="space-y-3">
               <div>
-                <label htmlFor="email" className="block text-sm text-slate-300 mb-1.5">
+                <label htmlFor="email" className="block text-sm text-nyc-blue mb-1.5">
                   Email address
                 </label>
                 <input
@@ -130,18 +129,18 @@ function LoginForm() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
                   required
-                  className="w-full px-3 py-2.5 rounded-lg bg-slate-900 border border-slate-600 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+                  className="w-full px-3 py-2.5 rounded border border-nyc-border bg-white text-nyc-blue placeholder-nyc-muted text-sm focus:outline-none focus:border-nyc-orange focus:ring-1 focus:ring-nyc-orange/30 transition-colors"
                 />
               </div>
 
               {error && (
-                <p className="text-sm text-red-400">{error}</p>
+                <p className="text-sm text-red-600">{error}</p>
               )}
 
               <button
                 type="submit"
                 disabled={loading || !email}
-                className="w-full px-4 py-2.5 rounded-lg bg-indigo-500 hover:bg-indigo-400 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full px-4 py-2.5 rounded bg-nyc-orange hover:bg-nyc-orange-hover text-white text-sm font-bold uppercase tracking-wide transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? 'Sending...' : 'Send magic link'}
               </button>
@@ -149,11 +148,11 @@ function LoginForm() {
           )}
         </div>
 
-        <p className="text-center text-xs text-slate-500 mt-6">
+        <p className="text-center text-xs text-nyc-muted-light mt-6">
           By signing in, you agree to our{' '}
-          <a href="/terms" className="text-slate-400 hover:text-white transition-colors">Terms</a>
+          <a href="/terms" className="text-nyc-muted-light hover:text-white transition-colors">Terms</a>
           {' '}and{' '}
-          <a href="/privacy" className="text-slate-400 hover:text-white transition-colors">Privacy Policy</a>
+          <a href="/privacy" className="text-nyc-muted-light hover:text-white transition-colors">Privacy Policy</a>
         </p>
       </div>
     </div>

@@ -97,19 +97,19 @@ export default function ProfilePageClient({
   const allViewTags = [...selectedTags, ...customTags]
 
   return (
-    <div className="min-h-screen bg-slate-950 py-12 px-4">
+    <div className="min-h-screen bg-nyc-bg py-12 px-4">
       <div className="max-w-xl mx-auto space-y-8">
 
         {/* Header */}
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-bold text-white">Profile</h1>
-            <p className="text-slate-400 text-sm mt-1">@{profile.username}</p>
+            <p className="text-nyc-muted-light text-sm mt-1">@{profile.username}</p>
           </div>
           {!isEditing && (
             <button
               onClick={() => setIsEditing(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-300 transition-colors hover:border-slate-600 hover:text-white"
+              className="flex items-center gap-1.5 rounded border border-nyc-border bg-nyc-card px-3 py-1.5 text-sm text-nyc-blue transition-colors hover:border-nyc-border-light hover:text-nyc-orange"
             >
               <Pencil size={13} /> Edit Profile
             </button>
@@ -119,14 +119,14 @@ export default function ProfilePageClient({
         {/* Stats — always visible */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
-            { label: 'Supporting', value: stats.supporting, color: 'text-emerald-400' },
-            { label: 'Opposing',   value: stats.opposing,   color: 'text-red-400'     },
-            { label: 'Neutral',    value: stats.neutral,    color: 'text-amber-400'   },
-            { label: 'Following',  value: stats.following,  color: 'text-blue-400'    },
+            { label: 'Supporting', value: stats.supporting, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200' },
+            { label: 'Opposing',   value: stats.opposing,   color: 'text-red-600',     bg: 'bg-red-50',     border: 'border-red-200'     },
+            { label: 'Neutral',    value: stats.neutral,    color: 'text-amber-600',   bg: 'bg-amber-50',   border: 'border-amber-200'   },
+            { label: 'Following',  value: stats.following,  color: 'text-nyc-blue',    bg: 'bg-blue-50',    border: 'border-blue-200'    },
           ].map(stat => (
-            <div key={stat.label} className="bg-slate-800/80 rounded-xl border border-slate-700 p-3 text-center">
+            <div key={stat.label} className={`rounded border ${stat.border} ${stat.bg} p-3 text-center`}>
               <div className={`text-xl font-bold tabular-nums ${stat.color}`}>{stat.value}</div>
-              <div className="text-xs text-slate-500 mt-0.5">{stat.label}</div>
+              <div className="text-xs text-nyc-muted mt-0.5">{stat.label}</div>
             </div>
           ))}
         </div>
@@ -154,11 +154,11 @@ export default function ProfilePageClient({
               onCancel={() => setIsEditing(false)}
             />
 
-            <div className="rounded-xl border border-slate-700 bg-slate-800/80 p-6">
-              <h2 className="mb-1 flex items-center gap-2 text-base font-semibold text-white">
-                <Tag size={16} className="text-purple-400" /> Interests
+            <div className="rounded border border-nyc-border bg-nyc-card p-6">
+              <h2 className="mb-1 flex items-center gap-2 text-base font-semibold text-nyc-blue">
+                <Tag size={16} className="text-nyc-orange" /> Interests
               </h2>
-              <p className="mb-4 text-xs text-slate-500">
+              <p className="mb-4 text-xs text-nyc-muted">
                 Select predefined interests or create your own. These appear on your public profile.
               </p>
               <InterestTagsEditor
@@ -168,26 +168,26 @@ export default function ProfilePageClient({
               />
             </div>
 
-            <div className="rounded-xl border border-slate-700 bg-slate-800/80 p-6">
-              <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-white">
-                <Bell size={16} className="text-indigo-400" /> Notifications
+            <div className="rounded border border-nyc-border bg-nyc-card p-6">
+              <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-nyc-blue">
+                <Bell size={16} className="text-nyc-orange" /> Notifications
                 {notifSaving && (
-                  <span className="ml-auto text-xs text-slate-500">Saving…</span>
+                  <span className="ml-auto text-xs text-nyc-muted">Saving…</span>
                 )}
               </h2>
               <div className="space-y-4">
                 {NOTIF_ROWS.map(({ key, label, desc }) => (
                   <div key={key} className="flex items-center justify-between gap-4">
                     <div>
-                      <p className="text-sm font-medium text-slate-200">{label}</p>
-                      <p className="text-xs text-slate-500">{desc}</p>
+                      <p className="text-sm font-medium text-nyc-blue">{label}</p>
+                      <p className="text-xs text-nyc-muted">{desc}</p>
                     </div>
                     <button
                       onClick={() => handleNotifToggle(key)}
                       role="switch"
                       aria-checked={notifPrefs[key]}
-                      className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
-                        notifPrefs[key] ? 'bg-indigo-500' : 'bg-slate-600'
+                      className={`relative inline-flex h-6 w-11 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-nyc-orange ${
+                        notifPrefs[key] ? 'bg-nyc-orange' : 'bg-nyc-border'
                       }`}
                     >
                       <span
@@ -205,20 +205,20 @@ export default function ProfilePageClient({
           /* ── VIEW MODE ── */
           <>
             {/* Avatar + bio + links */}
-            <div className="rounded-xl border border-slate-700 bg-slate-800/80 p-6 flex gap-5 items-start">
+            <div className="rounded border border-nyc-border bg-nyc-card p-6 flex gap-5 items-start">
               <Avatar src={profile.avatar_url} name={profile.display_name} size="lg" />
               <div className="flex-1 min-w-0">
-                <p className="font-semibold text-white">{profile.display_name}</p>
-                <p className="text-sm text-slate-500 mt-0.5">@{profile.username}</p>
+                <p className="font-semibold text-nyc-blue">{profile.display_name}</p>
+                <p className="text-sm text-nyc-muted mt-0.5">@{profile.username}</p>
                 {profile.bio && (
-                  <p className="mt-2 text-sm text-slate-300">{profile.bio}</p>
+                  <p className="mt-2 text-sm text-nyc-blue">{profile.bio}</p>
                 )}
                 {activeLinks.length > 0 && (
                   <div className="mt-3 flex flex-wrap gap-2">
                     {activeLinks.map(({ platform, url }) => {
                       const p = PLATFORMS.find(pl => pl.key === platform)
                       const Icon = p?.Icon ?? LinkIcon
-                      const color = p?.color ?? 'text-slate-400'
+                      const color = p?.color ?? 'text-nyc-muted'
                       const href = url.startsWith('http') ? url : `https://${url}`
                       return (
                         <a
@@ -227,7 +227,7 @@ export default function ProfilePageClient({
                           target="_blank"
                           rel="noopener noreferrer"
                           title={p?.label ?? platform}
-                          className={`flex items-center gap-1.5 rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs ${color} transition-colors hover:border-slate-600`}
+                          className={`flex items-center gap-1.5 rounded border border-nyc-border bg-nyc-card-hover px-3 py-1 text-xs ${color} transition-colors hover:border-nyc-border-light`}
                         >
                           <Icon size={13} />
                           {p?.label ?? platform}
@@ -241,13 +241,18 @@ export default function ProfilePageClient({
 
             {/* Interest tags */}
             {allViewTags.length > 0 && (
-              <div className="rounded-xl border border-slate-700 bg-slate-800/80 p-6">
-                <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
-                  <Tag size={14} className="text-purple-400" /> Interests
+              <div className="rounded border border-nyc-border bg-nyc-card p-6">
+                <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-nyc-muted">
+                  <Tag size={14} className="text-nyc-orange" /> Interests
                 </h2>
                 <div className="flex flex-wrap gap-2">
                   {allViewTags.map(tag => (
-                    <span key={tag.id} className="rounded-full bg-slate-700 px-3 py-1 text-xs text-slate-300">
+                    <span key={tag.id} className={[
+                      'rounded-full border px-2.5 py-0.5 text-xs',
+                      tag.is_predefined
+                        ? 'border-nyc-orange/30 bg-nyc-orange/10 text-nyc-orange'
+                        : 'border-nyc-border bg-nyc-card-hover text-nyc-blue',
+                    ].join(' ')}>
                       {tag.name}
                     </span>
                   ))}

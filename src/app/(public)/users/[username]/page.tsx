@@ -27,12 +27,12 @@ export async function generateMetadata({ params }: { params: Promise<{ username:
 function getStatusStyle(status: string) {
   const s = status.toLowerCase()
   if (s.includes('enact') || s.includes('adopt') || s.includes('pass'))
-    return 'bg-emerald-500/20 text-emerald-300'
+    return 'bg-emerald-50 text-emerald-700 border border-emerald-200'
   if (s.includes('veto') || s.includes('fail') || s.includes('withdrawn'))
-    return 'bg-red-500/20 text-red-300'
+    return 'bg-red-50 text-red-700 border border-red-200'
   if (s.includes('hearing'))
-    return 'bg-blue-500/20 text-blue-300'
-  return 'bg-amber-500/20 text-amber-300'
+    return 'bg-blue-50 text-nyc-blue border border-blue-200'
+  return 'bg-orange-50 text-orange-700 border border-orange-200'
 }
 
 export default async function UserProfilePage({
@@ -54,7 +54,6 @@ export default async function UserProfilePage({
 
   const isOwnProfile = user?.id === profile.id
 
-  // Base queries for all profiles
   const baseQueries = [
     user && !isOwnProfile
       ? supabase
@@ -85,7 +84,6 @@ export default async function UserProfilePage({
     supabase.from('user_interest_tags').select('tag:interest_tags(id, name, slug, is_predefined)').eq('user_id', profile.id),
   ] as const
 
-  // Extra queries for own profile edit mode
   const ownerQueries = isOwnProfile
     ? [
         supabase
@@ -132,7 +130,6 @@ export default async function UserProfilePage({
 
   const activeLinks = ((profile.links ?? []) as { platform: string; url: string }[]).filter(l => l.url?.trim())
 
-  // Owner-specific data for edit mode
   let ownerData: {
     notificationPreferences: Record<string, boolean> | null
     communityBoard: string | null
@@ -167,20 +164,20 @@ export default async function UserProfilePage({
   }
 
   return (
-    <main className="min-h-screen bg-slate-950">
+    <main className="min-h-screen bg-nyc-bg">
       {/* Back nav */}
-      <div className="border-b border-slate-800 bg-slate-900/60 px-4 py-3 sm:px-6 lg:px-8">
+      <div className="border-b border-white/10 bg-nyc-blue px-4 py-3 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-3xl">
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 text-sm text-slate-400 transition-colors hover:text-slate-200"
+            className="inline-flex items-center gap-1.5 text-sm text-blue-200 transition-colors hover:text-white"
           >
             <ArrowLeft size={14} /> Home
           </Link>
         </div>
       </div>
 
-      <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8 space-y-8">
+      <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8 space-y-6">
         {/* Profile header */}
         <section className="flex items-start gap-5">
           <Avatar src={profile.avatar_url} name={profile.display_name} size="lg" />
@@ -188,7 +185,7 @@ export default async function UserProfilePage({
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h1 className="text-2xl font-bold text-white">{profile.display_name}</h1>
-                <p className="text-slate-500 text-sm mt-0.5">@{profile.username}</p>
+                <p className="text-nyc-muted-light text-sm mt-0.5">@{profile.username}</p>
               </div>
               {isOwnProfile && ownerData && (
                 <OwnProfileEditor
@@ -219,7 +216,7 @@ export default async function UserProfilePage({
                 {activeLinks.map(({ platform, url }) => {
                   const p = PLATFORMS.find(pl => pl.key === platform)
                   const Icon = p?.Icon ?? LinkIcon
-                  const color = p?.color ?? 'text-slate-400'
+                  const color = p?.color ?? 'text-nyc-muted'
                   const href = url.startsWith('http') ? url : `https://${url}`
                   return (
                     <a
@@ -228,7 +225,7 @@ export default async function UserProfilePage({
                       target="_blank"
                       rel="noopener noreferrer"
                       title={p?.label ?? platform}
-                      className={`flex items-center gap-1.5 rounded-full border border-slate-700 bg-slate-900 px-3 py-1 text-xs ${color} transition-colors hover:border-slate-600`}
+                      className={`flex items-center gap-1.5 rounded border border-nyc-border/40 bg-white/5 px-3 py-1 text-xs ${color} transition-colors hover:border-nyc-border/70`}
                     >
                       <Icon size={13} />
                       {p?.label ?? platform}
@@ -247,8 +244,8 @@ export default async function UserProfilePage({
                     className={[
                       'rounded-full border px-2.5 py-0.5 text-xs',
                       tag.is_predefined
-                        ? 'border-indigo-500/30 bg-indigo-500/10 text-indigo-300'
-                        : 'border-purple-500/30 bg-purple-500/10 text-purple-300',
+                        ? 'border-nyc-orange/30 bg-nyc-orange/10 text-nyc-orange'
+                        : 'border-white/20 bg-white/10 text-white',
                     ].join(' ')}
                   >
                     {tag.name}
@@ -259,10 +256,10 @@ export default async function UserProfilePage({
 
             {/* Follower / following counts */}
             <div className="mt-3 flex items-center gap-4 text-sm">
-              <span className="text-slate-400">
+              <span className="text-nyc-muted-light">
                 <span className="font-semibold text-white">{followersCount ?? 0}</span> followers
               </span>
-              <span className="text-slate-400">
+              <span className="text-nyc-muted-light">
                 <span className="font-semibold text-white">{followingCount ?? 0}</span> following
               </span>
             </div>
@@ -294,18 +291,18 @@ export default async function UserProfilePage({
         <section>
           <div className="grid grid-cols-3 gap-3">
             {[
-              { label: 'Supporting', value: supportCount ?? 0, color: 'text-emerald-400' },
-              { label: 'Opposing', value: opposeCount ?? 0, color: 'text-red-400' },
-              { label: 'Neutral', value: neutralCount ?? 0, color: 'text-amber-400' },
+              { label: 'Supporting', value: supportCount ?? 0, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200' },
+              { label: 'Opposing', value: opposeCount ?? 0, color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-200' },
+              { label: 'Neutral', value: neutralCount ?? 0, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200' },
             ].map((stat) => (
               <div
                 key={stat.label}
-                className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-center"
+                className={`rounded border ${stat.border} ${stat.bg} p-3 text-center`}
               >
                 <div className={`text-xl font-bold tabular-nums ${stat.color}`}>
                   {stat.value}
                 </div>
-                <div className="text-xs text-slate-500 mt-0.5">{stat.label}</div>
+                <div className="text-xs text-nyc-muted mt-0.5">{stat.label}</div>
               </div>
             ))}
           </div>
@@ -313,32 +310,32 @@ export default async function UserProfilePage({
 
         {/* Following legislation */}
         <section>
-          <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
+          <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-white">
             <Bookmark size={14} />
             Following
             {bookmarks.length > 0 && (
-              <span className="rounded-full bg-slate-700 px-2 py-0.5 text-xs normal-case text-slate-300">
+              <span className="rounded-full border border-nyc-border/40 bg-white/10 px-2 py-0.5 text-xs normal-case text-white">
                 {bookmarks.length}
               </span>
             )}
           </h2>
           {bookmarks.length === 0 ? (
-            <p className="text-sm italic text-slate-600">Not following any legislation.</p>
+            <p className="text-sm italic text-nyc-muted-light">Not following any legislation.</p>
           ) : (
             <div className="space-y-3">
               {bookmarks.map((item) => (
                 <Link
                   key={item.id}
                   href={`/legislation/${item.slug}`}
-                  className="block rounded-xl border border-slate-800 bg-slate-900/60 p-4 transition-colors hover:border-slate-700 hover:bg-slate-800/60"
+                  className="block rounded border border-nyc-border bg-nyc-card p-4 transition-colors hover:border-nyc-border-light hover:bg-nyc-card-hover"
                 >
                   <div className="mb-1 flex items-center gap-2">
-                    <span className={`rounded-full px-2 py-0.5 text-xs ${getStatusStyle(item.status)}`}>
+                    <span className={`rounded px-2 py-0.5 text-xs font-bold uppercase tracking-wide ${getStatusStyle(item.status)}`}>
                       {item.status}
                     </span>
-                    <span className="font-mono text-xs text-slate-500">{item.file_number}</span>
+                    <span className="font-mono text-xs text-nyc-muted">{item.file_number}</span>
                   </div>
-                  <p className="line-clamp-2 text-sm text-slate-300">{item.title}</p>
+                  <p className="line-clamp-2 text-sm text-nyc-blue">{item.title}</p>
                 </Link>
               ))}
             </div>
@@ -347,30 +344,30 @@ export default async function UserProfilePage({
 
         {/* Recent comments */}
         <section>
-          <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
+          <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-white">
             <MessageSquare size={14} />
             Recent Comments
           </h2>
           {comments.length === 0 ? (
-            <p className="text-sm italic text-slate-600">No comments yet.</p>
+            <p className="text-sm italic text-nyc-muted-light">No comments yet.</p>
           ) : (
             <div className="space-y-3">
               {comments.map((comment) => (
                 <div
                   key={comment.id}
-                  className="rounded-xl border border-slate-800 bg-slate-900/60 p-4"
+                  className="rounded border border-nyc-border bg-nyc-card p-4"
                 >
-                  <p className="line-clamp-3 text-sm text-slate-300">{comment.body}</p>
+                  <p className="line-clamp-3 text-sm text-nyc-blue">{comment.body}</p>
                   <div className="mt-2 flex items-center justify-between gap-2">
                     {comment.legislation && (
                       <Link
                         href={`/legislation/${comment.legislation.slug}`}
-                        className="font-mono text-xs text-indigo-400 hover:underline"
+                        className="font-mono text-xs text-nyc-orange hover:underline"
                       >
                         {comment.legislation.file_number}
                       </Link>
                     )}
-                    <span className="text-xs text-slate-600">
+                    <span className="text-xs text-nyc-muted">
                       {format(new Date(comment.created_at), 'MMM d, yyyy')}
                     </span>
                   </div>

@@ -49,18 +49,18 @@ export default function CommentInput({
         placeholder={placeholder}
         rows={parentCommentId ? 2 : 3}
         maxLength={MAX}
-        className="w-full resize-none rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors"
+        className="w-full resize-none rounded border border-nyc-border bg-nyc-card px-3 py-2.5 text-sm text-nyc-blue placeholder-nyc-muted focus:border-nyc-orange focus:outline-none focus:ring-1 focus:ring-nyc-orange/30 transition-colors"
       />
       <div className="flex items-center justify-between">
-        <span className={`text-xs ${body.length > MAX * 0.9 ? 'text-amber-400' : 'text-slate-600'}`}>
+        <span className={`text-xs ${body.length > MAX * 0.9 ? 'text-amber-600' : 'text-nyc-muted/60'}`}>
           {body.length}/{MAX}
         </span>
         <div className="flex items-center gap-3">
-          {error && <p className="text-xs text-red-400">{error}</p>}
+          {error && <p className="text-xs text-red-500">{error}</p>}
           <button
             type="submit"
             disabled={loading || !body.trim()}
-            className="rounded-lg bg-indigo-500 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded bg-nyc-orange px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-nyc-orange-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? 'Posting...' : parentCommentId ? 'Reply' : 'Comment'}
           </button>
