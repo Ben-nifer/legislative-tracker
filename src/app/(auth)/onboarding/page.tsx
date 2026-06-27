@@ -26,7 +26,6 @@ function OnboardingForm() {
 
   const supabase = createClient()
 
-  // Pre-fill display name from Google OAuth if available
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user?.user_metadata?.full_name) {
@@ -35,7 +34,6 @@ function OnboardingForm() {
     })
   }, [])
 
-  // Auto-generate username suggestion from display name
   useEffect(() => {
     if (displayName && !username) {
       const suggested = displayName
@@ -96,20 +94,20 @@ function OnboardingForm() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4">
+    <div className="min-h-screen bg-nyc-bg flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-white">Welcome!</h1>
-          <p className="text-slate-400 mt-1 text-sm">
+          <h1 className="text-2xl font-black uppercase tracking-widest text-white">Welcome!</h1>
+          <p className="text-nyc-muted-light mt-1 text-sm">
             Set up your profile to get started
           </p>
         </div>
 
-        <div className="bg-slate-800/80 backdrop-blur rounded-xl border border-slate-700 p-6">
+        <div className="bg-nyc-card rounded border border-nyc-border p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Display Name */}
             <div>
-              <label htmlFor="displayName" className="block text-sm text-slate-300 mb-1.5">
+              <label htmlFor="displayName" className="block text-sm text-nyc-blue mb-1.5">
                 Display name
               </label>
               <input
@@ -120,17 +118,17 @@ function OnboardingForm() {
                 placeholder="Your name"
                 required
                 maxLength={50}
-                className="w-full px-3 py-2.5 rounded-lg bg-slate-900 border border-slate-600 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+                className="w-full px-3 py-2.5 rounded border border-nyc-border bg-white text-nyc-blue placeholder-nyc-muted text-sm focus:outline-none focus:border-nyc-orange focus:ring-1 focus:ring-nyc-orange/30 transition-colors"
               />
             </div>
 
             {/* Username */}
             <div>
-              <label htmlFor="username" className="block text-sm text-slate-300 mb-1.5">
+              <label htmlFor="username" className="block text-sm text-nyc-blue mb-1.5">
                 Username
               </label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">@</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-nyc-muted text-sm">@</span>
                 <input
                   id="username"
                   type="text"
@@ -145,22 +143,22 @@ function OnboardingForm() {
                   required
                   minLength={3}
                   maxLength={30}
-                  className="w-full pl-7 pr-3 py-2.5 rounded-lg bg-slate-900 border border-slate-600 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-colors"
+                  className="w-full pl-7 pr-3 py-2.5 rounded border border-nyc-border bg-white text-nyc-blue placeholder-nyc-muted text-sm focus:outline-none focus:border-nyc-orange focus:ring-1 focus:ring-nyc-orange/30 transition-colors"
                 />
               </div>
               {usernameError ? (
-                <p className="mt-1 text-xs text-red-400">{usernameError}</p>
+                <p className="mt-1 text-xs text-red-500">{usernameError}</p>
               ) : username.length >= 3 ? (
-                <p className="mt-1 text-xs text-emerald-400">Looks good</p>
+                <p className="mt-1 text-xs text-emerald-600">Looks good</p>
               ) : (
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 text-xs text-nyc-muted">
                   Letters, numbers, and underscores only
                 </p>
               )}
             </div>
 
             {error && (
-              <p className="text-sm text-red-400 bg-red-500/10 rounded-lg px-3 py-2">
+              <p className="text-sm text-red-600 bg-red-50 rounded border border-red-200 px-3 py-2">
                 {error}
               </p>
             )}
@@ -168,7 +166,7 @@ function OnboardingForm() {
             <button
               type="submit"
               disabled={loading || !!usernameError || !username || !displayName}
-              className="w-full px-4 py-2.5 rounded-lg bg-indigo-500 hover:bg-indigo-400 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+              className="w-full px-4 py-2.5 rounded bg-nyc-orange hover:bg-nyc-orange-hover text-white text-sm font-bold uppercase tracking-wide transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-2"
             >
               {loading ? 'Setting up...' : 'Get started'}
             </button>

@@ -15,16 +15,16 @@ type NotificationType = 'new_follower' | 'comment_reply' | 'comment_upvote' | st
 
 function NotificationIcon({ type }: { type: NotificationType }) {
   if (type === 'new_follower')
-    return <UserPlus size={16} className="text-indigo-400 shrink-0" />
+    return <UserPlus size={16} className="text-nyc-orange shrink-0" />
   if (type === 'comment_reply' || type === 'comment_upvote')
-    return <MessageSquare size={16} className="text-purple-400 shrink-0" />
+    return <MessageSquare size={16} className="text-nyc-blue shrink-0" />
   if (type === 'legislation_update')
-    return <FileText size={16} className="text-emerald-400 shrink-0" />
+    return <FileText size={16} className="text-emerald-600 shrink-0" />
   if (type === 'hearing_alert')
-    return <Calendar size={16} className="text-blue-400 shrink-0" />
+    return <Calendar size={16} className="text-blue-600 shrink-0" />
   if (type === 'bill_amendment')
-    return <FilePen size={16} className="text-amber-400 shrink-0" />
-  return <Bell size={16} className="text-slate-400 shrink-0" />
+    return <FilePen size={16} className="text-amber-600 shrink-0" />
+  return <Bell size={16} className="text-nyc-muted shrink-0" />
 }
 
 export default async function NotificationsPage() {
@@ -33,8 +33,6 @@ export default async function NotificationsPage() {
 
   if (!user) redirect('/login?next=/notifications')
 
-  // Mark all read on page load (clears the badge) — done directly to avoid
-  // calling revalidatePath during render, which Next.js disallows.
   await supabase
     .from('notifications')
     .update({ read: true })
@@ -51,13 +49,13 @@ export default async function NotificationsPage() {
   const hasUnread = items.some((n) => !n.read)
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100">
+    <main className="min-h-screen bg-nyc-bg">
       <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6 lg:px-8 space-y-6">
 
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Bell size={20} className="text-indigo-400" />
+            <Bell size={20} className="text-nyc-orange" />
             <h1 className="text-2xl font-bold text-white">Notifications</h1>
           </div>
           <MarkAllReadButton hasUnread={hasUnread} />
@@ -65,36 +63,36 @@ export default async function NotificationsPage() {
 
         {/* List */}
         {items.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-700 p-16 text-center">
-            <Bell size={32} className="mx-auto mb-3 text-slate-700" />
-            <p className="text-sm text-slate-500">No notifications yet.</p>
+          <div className="rounded border border-dashed border-nyc-border/40 p-16 text-center">
+            <Bell size={32} className="mx-auto mb-3 text-nyc-muted-light/30" />
+            <p className="text-sm text-nyc-muted-light">No notifications yet.</p>
           </div>
         ) : (
           <div className="space-y-2">
             {items.map((n) => {
               const inner = (
                 <div className={[
-                  'flex items-start gap-3 rounded-xl border p-4 transition-colors',
+                  'flex items-start gap-3 rounded border p-4 transition-colors',
                   !n.read
-                    ? 'border-indigo-500/30 bg-indigo-500/5'
-                    : 'border-slate-800 bg-slate-900/60',
-                  n.url ? 'hover:border-slate-700 hover:bg-slate-800/60' : '',
+                    ? 'border-nyc-orange/30 bg-nyc-orange/5'
+                    : 'border-nyc-border bg-nyc-card',
+                  n.url ? 'hover:border-nyc-border-light hover:bg-nyc-card-hover' : '',
                 ].join(' ')}>
                   {/* Unread dot */}
                   <div className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center">
                     {!n.read && (
-                      <span className="h-2 w-2 rounded-full bg-indigo-400" />
+                      <span className="h-2 w-2 rounded-full bg-nyc-orange" />
                     )}
                   </div>
 
                   <NotificationIcon type={n.type} />
 
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-100">{n.title}</p>
+                    <p className="text-sm font-medium text-nyc-blue">{n.title}</p>
                     {n.body && (
-                      <p className="mt-0.5 text-sm text-slate-400">{n.body}</p>
+                      <p className="mt-0.5 text-sm text-nyc-muted">{n.body}</p>
                     )}
-                    <p className="mt-1.5 text-xs text-slate-600">
+                    <p className="mt-1.5 text-xs text-nyc-muted/60">
                       {formatDistanceToNow(new Date(n.created_at), { addSuffix: true })}
                     </p>
                   </div>

@@ -88,11 +88,11 @@ export default function CommentSection({
     <section id="comments" className="space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-slate-400">
+        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-nyc-muted">
           <MessageSquare size={14} />
           Discussion
           {totalCount > 0 && (
-            <span className="rounded-full bg-slate-700 px-2 py-0.5 text-xs normal-case text-slate-300">
+            <span className="rounded-full bg-nyc-card-hover px-2 py-0.5 text-xs normal-case text-nyc-blue border border-nyc-border">
               {totalCount}
             </span>
           )}
@@ -110,8 +110,8 @@ export default function CommentSection({
                 className={[
                   'rounded-full px-3 py-1 text-xs font-medium transition-colors',
                   sort === opt.value
-                    ? 'bg-slate-700 text-slate-100'
-                    : 'text-slate-500 hover:text-slate-300',
+                    ? 'bg-nyc-card-hover text-nyc-blue border border-nyc-border'
+                    : 'text-nyc-muted hover:text-nyc-blue',
                 ].join(' ')}
               >
                 {opt.label}
@@ -134,36 +134,36 @@ export default function CommentSection({
             placeholder="Share your thoughts on this legislation…"
             rows={3}
             maxLength={MAX}
-            className="w-full resize-none overflow-hidden rounded-lg border border-slate-600 bg-slate-900 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors"
+            className="w-full resize-none overflow-hidden rounded border border-nyc-border bg-nyc-card px-3 py-2.5 text-sm text-nyc-blue placeholder-nyc-muted focus:border-nyc-orange focus:outline-none focus:ring-1 focus:ring-nyc-orange/30 transition-colors"
           />
           {error && (
-            <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-400">
+            <p className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">
               {error}
             </p>
           )}
           <div className="flex items-center justify-between">
-            <span className={`text-xs ${body.length > MAX * 0.9 ? 'text-amber-400' : 'text-slate-600'}`}>
+            <span className={`text-xs ${body.length > MAX * 0.9 ? 'text-amber-600' : 'text-nyc-muted/60'}`}>
               {body.length > 0 ? `${body.length}/${MAX} · ⌘↵ to post` : ''}
             </span>
             <button
               type="submit"
               disabled={loading || !body.trim()}
-              className="rounded-lg bg-indigo-500 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-indigo-400 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded bg-nyc-orange px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-nyc-orange-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? 'Posting…' : 'Comment'}
             </button>
           </div>
         </form>
       ) : (
-        <div className="rounded-lg border border-slate-700 bg-slate-800/60 px-4 py-3 text-sm text-slate-400">
-          <Link href="/login" className="text-indigo-400 hover:underline">Sign in</Link>{' '}
+        <div className="rounded border border-nyc-border bg-nyc-card-hover px-4 py-3 text-sm text-nyc-muted">
+          <Link href="/login" className="text-nyc-orange hover:underline">Sign in</Link>{' '}
           to join the discussion.
         </div>
       )}
 
       {/* Comment list */}
       {sorted.length === 0 ? (
-        <p className="py-8 text-center text-sm text-slate-600">
+        <p className="py-8 text-center text-sm text-nyc-muted">
           No comments yet — be the first to share your thoughts.
         </p>
       ) : (

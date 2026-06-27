@@ -31,10 +31,16 @@ export type LegislationCardData = {
   primary_sponsor_slug?: string | null
 }
 
+function isValidSummary(text: string | null | undefined): boolean {
+  if (!text || text.trim().length < 20) return false
+  if (/^\d+$/.test(text.trim())) return false
+  return true
+}
+
 function getCardTitle(item: LegislationCardData): string {
-  if (item.short_summary) return item.short_summary
-  if (item.ai_summary) {
-    const words = item.ai_summary.trim().split(/\s+/)
+  if (item.short_summary && isValidSummary(item.short_summary)) return item.short_summary
+  if (isValidSummary(item.ai_summary)) {
+    const words = item.ai_summary!.trim().split(/\s+/)
     return words.slice(0, 10).join(' ') + (words.length > 10 ? '...' : '')
   }
   return item.title
@@ -86,7 +92,11 @@ export default function LegislationCard({
     bookmark_count: 0,
   }
   const cardTitle = getCardTitle(legislation)
-  const summary = legislation.ai_summary ?? legislation.official_summary
+  const summary = isValidSummary(legislation.ai_summary)
+    ? legislation.ai_summary
+    : isValidSummary(legislation.official_summary)
+    ? legislation.official_summary
+    : null
 
   return (
     <Link

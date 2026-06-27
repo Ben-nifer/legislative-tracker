@@ -36,7 +36,7 @@ export default function VoteButtons({
   }
 
   const scoreColor =
-    score > 0 ? 'text-indigo-400' : score < 0 ? 'text-red-400' : 'text-slate-500'
+    score > 0 ? 'text-nyc-orange' : score < 0 ? 'text-red-500' : 'text-nyc-muted'
 
   return (
     <div className="flex items-center gap-1">
@@ -47,10 +47,10 @@ export default function VoteButtons({
         className={[
           'rounded p-0.5 transition-colors',
           !isLoggedIn || pending
-            ? 'cursor-not-allowed text-slate-700'
+            ? 'cursor-not-allowed text-nyc-muted/30'
             : userVote === 1
-            ? 'text-indigo-400'
-            : 'text-slate-500 hover:text-indigo-400',
+            ? 'text-nyc-orange'
+            : 'text-nyc-muted hover:text-nyc-orange',
         ].join(' ')}
       >
         <ArrowUp size={15} />
@@ -67,10 +67,10 @@ export default function VoteButtons({
         className={[
           'rounded p-0.5 transition-colors',
           !isLoggedIn || pending
-            ? 'cursor-not-allowed text-slate-700'
+            ? 'cursor-not-allowed text-nyc-muted/30'
             : userVote === -1
-            ? 'text-red-400'
-            : 'text-slate-500 hover:text-red-400',
+            ? 'text-red-500'
+            : 'text-nyc-muted hover:text-red-500',
         ].join(' ')}
       >
         <ArrowDown size={15} />

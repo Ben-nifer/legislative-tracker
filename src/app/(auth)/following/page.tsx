@@ -14,12 +14,12 @@ export const revalidate = 0
 function getStatusStyle(status: string) {
   const s = status.toLowerCase()
   if (s.includes('enact') || s.includes('adopt') || s.includes('pass'))
-    return 'bg-emerald-500/20 text-emerald-300'
+    return 'bg-emerald-50 text-emerald-700 border border-emerald-200'
   if (s.includes('veto') || s.includes('fail') || s.includes('withdrawn'))
-    return 'bg-red-500/20 text-red-300'
+    return 'bg-red-50 text-red-700 border border-red-200'
   if (s.includes('hearing'))
-    return 'bg-blue-500/20 text-blue-300'
-  return 'bg-amber-500/20 text-amber-300'
+    return 'bg-blue-50 text-nyc-blue border border-blue-200'
+  return 'bg-orange-50 text-orange-700 border border-orange-200'
 }
 
 export default async function FollowingPage() {
@@ -67,7 +67,6 @@ export default async function FollowingPage() {
       .order('created_at', { ascending: false }),
   ])
 
-  // Fetch upcoming events for followed legislation
   const followedLegislationIds = (legislationFollows ?? []).map((f) => f.legislation_id)
   const { data: upcomingEvents } = followedLegislationIds.length > 0
     ? await supabase
@@ -116,7 +115,6 @@ export default async function FollowingPage() {
     }]
   })
 
-  // Group upcoming events by date
   type UpcomingEvent = {
     id: string
     event_date: string
@@ -141,7 +139,6 @@ export default async function FollowingPage() {
     return profile ? [profile] : []
   })
 
-  // Feed: recent legislation from followed legislators
   let feedItems: {
     id: string; slug: string; file_number: string; title: string
     status: string; intro_date: string | null; sponsor: string
@@ -169,12 +166,12 @@ export default async function FollowingPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100">
+    <main className="min-h-screen bg-nyc-bg">
       <div className="mx-auto max-w-5xl px-4 py-10 sm:px-6 lg:px-8 space-y-10">
 
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-white">Following</h1>
-          <Link href="/followers" className="text-sm text-indigo-400 hover:underline">
+          <Link href="/followers" className="text-sm text-nyc-orange hover:underline">
             View followers
           </Link>
         </div>
@@ -183,12 +180,12 @@ export default async function FollowingPage() {
         <section>
           <div className="mb-4 flex items-center gap-2">
             <CalendarDays size={16} className="text-blue-400" />
-            <h2 className="font-semibold text-slate-200">Upcoming</h2>
+            <h2 className="font-semibold text-white">Upcoming</h2>
           </div>
 
           {sortedDates.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-700 p-8 text-center">
-              <p className="text-sm text-slate-500">No upcoming hearings or votes for bills you follow.</p>
+            <div className="rounded border border-dashed border-nyc-border/40 p-8 text-center">
+              <p className="text-sm text-nyc-muted-light">No upcoming hearings or votes for bills you follow.</p>
             </div>
           ) : (
             <div className="space-y-6">
@@ -196,7 +193,7 @@ export default async function FollowingPage() {
                 const events = eventsByDate.get(dateKey)!
                 return (
                   <div key={dateKey}>
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    <p className="mb-2 text-xs font-bold uppercase tracking-widest text-nyc-muted-light">
                       {format(new Date(dateKey + 'T12:00:00'), 'EEEE, MMMM d')}
                     </p>
                     <div className="space-y-2">
@@ -205,13 +202,13 @@ export default async function FollowingPage() {
                         return (
                           <div
                             key={ev.id}
-                            className="flex items-start gap-3 rounded-xl border border-slate-800 bg-slate-900/60 p-4"
+                            className="flex items-start gap-3 rounded border border-nyc-border bg-nyc-card p-4"
                           >
                             <span className={[
-                              'mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-xs font-medium',
+                              'mt-0.5 shrink-0 rounded px-2 py-0.5 text-xs font-bold uppercase tracking-wide',
                               isVote
-                                ? 'bg-amber-500/20 text-amber-300'
-                                : 'bg-blue-500/20 text-blue-300',
+                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                : 'bg-blue-50 text-nyc-blue border border-blue-200',
                             ].join(' ')}>
                               {ev.event_type ?? 'Hearing'}
                             </span>
@@ -219,15 +216,15 @@ export default async function FollowingPage() {
                               {ev.legislation ? (
                                 <Link
                                   href={`/legislation/${ev.legislation.slug}`}
-                                  className="text-sm font-medium text-slate-200 hover:text-white hover:underline"
+                                  className="text-sm font-medium text-nyc-blue hover:text-nyc-orange hover:underline transition-colors"
                                 >
-                                  <span className="font-mono text-xs text-slate-500 mr-1.5">
+                                  <span className="font-mono text-xs text-nyc-muted mr-1.5">
                                     {ev.legislation.file_number}
                                   </span>
                                   {ev.legislation.short_summary ?? ev.legislation.title}
                                 </Link>
                               ) : null}
-                              <div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-500">
+                              <div className="mt-1 flex flex-wrap gap-2 text-xs text-nyc-muted">
                                 <span>{format(new Date(ev.event_date), 'h:mm a')}</span>
                                 {ev.location && <span>· {ev.location}</span>}
                               </div>
@@ -246,11 +243,11 @@ export default async function FollowingPage() {
         {/* ── Followed Users ─────────────────────────────────────────── */}
         <section>
           <div className="mb-4 flex items-center gap-2">
-            <UserRound size={16} className="text-pink-400" />
-            <h2 className="font-semibold text-slate-200">
+            <UserRound size={16} className="text-nyc-orange" />
+            <h2 className="font-semibold text-white">
               Users
               {followedUsers.length > 0 && (
-                <span className="ml-2 rounded-full bg-slate-700 px-2 py-0.5 text-xs text-slate-300">
+                <span className="ml-2 rounded-full border border-nyc-border/40 bg-white/10 px-2 py-0.5 text-xs text-white">
                   {followedUsers.length}
                 </span>
               )}
@@ -258,8 +255,8 @@ export default async function FollowingPage() {
           </div>
 
           {followedUsers.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-700 p-8 text-center">
-              <p className="text-sm text-slate-500">You&apos;re not following any users yet.</p>
+            <div className="rounded border border-dashed border-nyc-border/40 p-8 text-center">
+              <p className="text-sm text-nyc-muted-light">You&apos;re not following any users yet.</p>
             </div>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -267,14 +264,14 @@ export default async function FollowingPage() {
                 <Link
                   key={u.id}
                   href={`/users/${u.username}`}
-                  className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/60 p-4 transition-colors hover:border-slate-700"
+                  className="flex items-center gap-3 rounded border border-nyc-border bg-nyc-card p-4 transition-colors hover:border-nyc-border-light hover:bg-nyc-card-hover"
                 >
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-pink-500/20 text-sm font-bold text-pink-300">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-nyc-orange/10 text-sm font-bold text-nyc-orange">
                     {u.display_name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
                   </div>
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-slate-100">{u.display_name}</p>
-                    <p className="truncate text-xs text-slate-500">@{u.username}</p>
+                    <p className="truncate text-sm font-medium text-nyc-blue">{u.display_name}</p>
+                    <p className="truncate text-xs text-nyc-muted">@{u.username}</p>
                   </div>
                 </Link>
               ))}
@@ -285,11 +282,11 @@ export default async function FollowingPage() {
         {/* ── Followed Council Members ──────────────────────────────── */}
         <section>
           <div className="mb-4 flex items-center gap-2">
-            <Users size={16} className="text-indigo-400" />
-            <h2 className="font-semibold text-slate-200">
+            <Users size={16} className="text-nyc-blue" />
+            <h2 className="font-semibold text-white">
               Council Members
               {followedLegislators.length > 0 && (
-                <span className="ml-2 rounded-full bg-slate-700 px-2 py-0.5 text-xs text-slate-300">
+                <span className="ml-2 rounded-full border border-nyc-border/40 bg-white/10 px-2 py-0.5 text-xs text-white">
                   {followedLegislators.length}
                 </span>
               )}
@@ -297,9 +294,9 @@ export default async function FollowingPage() {
           </div>
 
           {followedLegislators.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-700 p-8 text-center">
-              <p className="text-sm text-slate-500">You&apos;re not following any council members yet.</p>
-              <Link href="/council-members" className="mt-2 inline-flex items-center gap-1 text-sm text-indigo-400 hover:underline">
+            <div className="rounded border border-dashed border-nyc-border/40 p-8 text-center">
+              <p className="text-sm text-nyc-muted-light">You&apos;re not following any council members yet.</p>
+              <Link href="/council-members" className="mt-2 inline-flex items-center gap-1 text-sm text-nyc-orange hover:underline">
                 Browse council members <ArrowRight size={13} />
               </Link>
             </div>
@@ -309,14 +306,14 @@ export default async function FollowingPage() {
                 <Link
                   key={m.id}
                   href={`/council-members/${m.slug}`}
-                  className="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-900/60 p-4 transition-colors hover:border-slate-700"
+                  className="flex items-center gap-3 rounded border border-nyc-border bg-nyc-card p-4 transition-colors hover:border-nyc-border-light hover:bg-nyc-card-hover"
                 >
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-500/20 text-sm font-bold text-indigo-300">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-nyc-blue/10 text-sm font-bold text-nyc-blue">
                     {m.full_name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
                   </div>
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-slate-100">{m.full_name}</p>
-                    <p className="text-xs text-slate-500">
+                    <p className="truncate text-sm font-medium text-nyc-blue">{m.full_name}</p>
+                    <p className="text-xs text-nyc-muted">
                       {m.district ? `District ${m.district}` : ''}
                       {m.district && m.borough ? ' · ' : ''}
                       {m.borough ?? ''}
@@ -331,11 +328,11 @@ export default async function FollowingPage() {
         {/* ── Followed Topics ───────────────────────────────────────── */}
         <section>
           <div className="mb-4 flex items-center gap-2">
-            <Tag size={16} className="text-purple-400" />
-            <h2 className="font-semibold text-slate-200">
+            <Tag size={16} className="text-nyc-orange" />
+            <h2 className="font-semibold text-white">
               Topics
               {followedTopics.length > 0 && (
-                <span className="ml-2 rounded-full bg-slate-700 px-2 py-0.5 text-xs text-slate-300">
+                <span className="ml-2 rounded-full border border-nyc-border/40 bg-white/10 px-2 py-0.5 text-xs text-white">
                   {followedTopics.length}
                 </span>
               )}
@@ -343,9 +340,9 @@ export default async function FollowingPage() {
           </div>
 
           {followedTopics.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-700 p-8 text-center">
-              <p className="text-sm text-slate-500">You&apos;re not following any topics yet.</p>
-              <Link href="/legislation" className="mt-2 inline-flex items-center gap-1 text-sm text-indigo-400 hover:underline">
+            <div className="rounded border border-dashed border-nyc-border/40 p-8 text-center">
+              <p className="text-sm text-nyc-muted-light">You&apos;re not following any topics yet.</p>
+              <Link href="/legislation" className="mt-2 inline-flex items-center gap-1 text-sm text-nyc-orange hover:underline">
                 Browse legislation to find topics <ArrowRight size={13} />
               </Link>
             </div>
@@ -354,7 +351,7 @@ export default async function FollowingPage() {
               {followedTopics.map((t) => (
                 <span
                   key={t.id}
-                  className="rounded-full border border-purple-500/30 bg-purple-500/10 px-3 py-1 text-sm text-purple-300"
+                  className="rounded-full border border-nyc-orange/30 bg-nyc-orange/10 px-3 py-1 text-sm text-nyc-orange"
                 >
                   {t.name}
                 </span>
@@ -366,11 +363,11 @@ export default async function FollowingPage() {
         {/* ── Bills You Follow ─────────────────────────────────────── */}
         <section>
           <div className="mb-4 flex items-center gap-2">
-            <Bell size={16} className="text-emerald-400" />
-            <h2 className="font-semibold text-slate-200">
+            <Bell size={16} className="text-emerald-500" />
+            <h2 className="font-semibold text-white">
               Bills You Follow
               {followedLegislation.length > 0 && (
-                <span className="ml-2 rounded-full bg-slate-700 px-2 py-0.5 text-xs text-slate-300">
+                <span className="ml-2 rounded-full border border-nyc-border/40 bg-white/10 px-2 py-0.5 text-xs text-white">
                   {followedLegislation.length}
                 </span>
               )}
@@ -378,9 +375,9 @@ export default async function FollowingPage() {
           </div>
 
           {followedLegislation.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-700 p-8 text-center">
-              <p className="text-sm text-slate-500">You aren&apos;t following any bills yet.</p>
-              <Link href="/legislation" className="mt-2 inline-flex items-center gap-1 text-sm text-indigo-400 hover:underline">
+            <div className="rounded border border-dashed border-nyc-border/40 p-8 text-center">
+              <p className="text-sm text-nyc-muted-light">You aren&apos;t following any bills yet.</p>
+              <Link href="/legislation" className="mt-2 inline-flex items-center gap-1 text-sm text-nyc-orange hover:underline">
                 Browse legislation to find bills to follow <ArrowRight size={13} />
               </Link>
             </div>
@@ -401,33 +398,33 @@ export default async function FollowingPage() {
         {followedLegislators.length > 0 && (
           <section>
             <div className="mb-4 flex items-center gap-2">
-              <FileText size={16} className="text-slate-400" />
-              <h2 className="font-semibold text-slate-200">Recent legislation from people you follow</h2>
+              <FileText size={16} className="text-nyc-muted-light" />
+              <h2 className="font-semibold text-white">Recent legislation from people you follow</h2>
             </div>
 
             {feedItems.length === 0 ? (
-              <p className="text-sm text-slate-500">No recent legislation found.</p>
+              <p className="text-sm text-nyc-muted-light">No recent legislation found.</p>
             ) : (
               <div className="space-y-3">
                 {feedItems.map((item) => (
                   <Link
                     key={item.id}
                     href={`/legislation/${item.slug}`}
-                    className="block rounded-xl border border-slate-800 bg-slate-900/60 p-4 transition-colors hover:border-slate-700 hover:bg-slate-800/60"
+                    className="block rounded border border-nyc-border bg-nyc-card p-4 transition-colors hover:border-nyc-border-light hover:bg-nyc-card-hover"
                   >
                     <div className="mb-2 flex items-center gap-2 flex-wrap">
-                      <span className={`rounded-full px-2 py-0.5 text-xs ${getStatusStyle(item.status)}`}>
+                      <span className={`rounded px-2 py-0.5 text-xs font-bold uppercase tracking-wide ${getStatusStyle(item.status)}`}>
                         {item.status}
                       </span>
-                      <span className="font-mono text-xs text-slate-500">{item.file_number}</span>
-                      <span className="text-xs text-slate-600">by {item.sponsor}</span>
+                      <span className="font-mono text-xs text-nyc-muted">{item.file_number}</span>
+                      <span className="text-xs text-nyc-muted">by {item.sponsor}</span>
                       {item.intro_date && (
-                        <span className="ml-auto text-xs text-slate-600">
+                        <span className="ml-auto text-xs text-nyc-muted">
                           {format(new Date(item.intro_date), 'MMM d, yyyy')}
                         </span>
                       )}
                     </div>
-                    <p className="line-clamp-2 text-sm text-slate-300">{item.title}</p>
+                    <p className="line-clamp-2 text-sm text-nyc-blue">{item.title}</p>
                   </Link>
                 ))}
               </div>
