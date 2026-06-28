@@ -512,7 +512,15 @@ export async function fullSync(since = '2022-01-01') {
   const legislation = await syncLegislation(since)
   console.log(`✅ Synced ${legislation} pieces of legislation`)
 
-  const { synced: sponsorships } = await syncSponsorships()
+  let sOffset = 0
+  let sponsorships = 0
+  const MAX_SPONSORSHIP_BATCHES = 20
+  for (let i = 0; i < MAX_SPONSORSHIP_BATCHES; i++) {
+    const result = await syncSponsorships(sOffset)
+    sponsorships += result.synced
+    if (result.done) break
+    sOffset = result.offset
+  }
   console.log(`✅ Synced ${sponsorships} sponsorships`)
 
   const stats = await initializeMissingStats()
