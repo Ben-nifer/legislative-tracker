@@ -15,6 +15,7 @@ import {
 import { formatDistanceToNow, format } from 'date-fns'
 import CommentThread from '@/components/comments/CommentThread'
 import EngagementSection from '@/components/legislation/EngagementSection'
+import FollowTopicButton from '@/components/topics/FollowTopicButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -69,6 +70,7 @@ type LegislationDetail = {
     comment_count: number
     bookmark_count: number
   }
+  topics: { id: string; name: string; slug: string }[]
 }
 
 // ---------------------------------------------------------------------------
@@ -117,7 +119,8 @@ async function getLegislation(slug: string): Promise<LegislationDetail | null> {
         event_type,
         location,
         video_url
-      )
+      ),
+      legislation_topics(topic:topics(id, name, slug))
     `)
     .eq('slug', slug)
     .single()
@@ -164,6 +167,11 @@ async function getLegislation(slug: string): Promise<LegislationDetail | null> {
       comment_count: statsRow?.comment_count ?? 0,
       bookmark_count: statsRow?.bookmark_count ?? 0,
     },
+    topics: ((data.legislation_topics ?? []) as { topic: { id: string; name: string; slug: string } | { id: string; name: string; slug: string }[] | null }[])
+      .flatMap((lt) => {
+        const t = Array.isArray(lt.topic) ? lt.topic[0] : lt.topic
+        return t ? [t] : []
+      }),
   }
 }
 
@@ -234,9 +242,10 @@ export default async function LegislationDetailPage({
   let userStance: 'support' | 'oppose' | 'neutral' | null = null
   let isFollowing = false
   let friendsFollowing: { display_name: string; username: string }[] = []
+  let followedTopicIds = new Set<string>()
 
   if (user) {
-    const [stanceResult, followResult, followingIdsResult] = await Promise.all([
+    const [stanceResult, followResult, followingIdsResult, topicFollowsResult] = await Promise.all([
       supabase
         .from('user_stances')
         .select('stance')
@@ -251,9 +260,14 @@ export default async function LegislationDetailPage({
         .from('user_follows')
         .select('following_id')
         .eq('follower_id', user.id),
+      supabase
+        .from('topic_follows')
+        .select('topic_id')
+        .eq('user_id', user.id),
     ])
     userStance = (stanceResult.data?.stance as typeof userStance) ?? null
     isFollowing = !!followResult.data
+    followedTopicIds = new Set((topicFollowsResult.data ?? []).map((r) => r.topic_id))
 
     const followingIds = (followingIdsResult.data ?? []).map((r) => r.following_id)
     if (followingIds.length > 0) {
@@ -333,6 +347,20 @@ export default async function LegislationDetailPage({
                   </>
                 )}
               </p>
+            )}
+
+            {legislation.topics.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {legislation.topics.map((topic) => (
+                  <FollowTopicButton
+                    key={topic.id}
+                    topicId={topic.id}
+                    topicName={topic.name}
+                    initialFollowing={followedTopicIds.has(topic.id)}
+                    isLoggedIn={!!user}
+                  />
+                ))}
+              </div>
             )}
           </section>
 

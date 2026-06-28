@@ -22,12 +22,13 @@ type Filters = {
   status?: string
   committee_id?: string
   sort?: string
+  topic?: string
 }
 
 async function getFilterOptions() {
   const supabase = await createServerSupabaseClient()
 
-  const [{ data: statusRows }, { data: legRows }] = await Promise.all([
+  const [{ data: statusRows }, { data: legRows }, { data: topicsData }] = await Promise.all([
     supabase
       .from('legislation')
       .select('status')
@@ -39,6 +40,7 @@ async function getFilterOptions() {
       .select('committee_id')
       .eq('type', 'introduction')
       .not('committee_id', 'is', null),
+    supabase.from('topics').select('id, name, slug').order('name'),
   ])
 
   // Deduplicate statuses
@@ -50,7 +52,7 @@ async function getFilterOptions() {
     ? await supabase.from('committees').select('id, name').in('id', committeeIds).order('name')
     : { data: [] as { id: string; name: string }[] }
 
-  return { statuses, committees: committeeRows ?? [] }
+  return { statuses, committees: committeeRows ?? [], topics: topicsData ?? [] }
 }
 
 async function getLegislation(
@@ -117,6 +119,22 @@ async function getLegislation(
     query = query.eq('committee_id', filters.committee_id)
   }
 
+  if (filters.topic) {
+    const { data: topicRow } = await supabase.from('topics').select('id').eq('slug', filters.topic).single()
+    if (topicRow) {
+      const { data: junctionRows } = await supabase
+        .from('legislation_topics')
+        .select('legislation_id')
+        .eq('topic_id', topicRow.id)
+      const topicLegislationIds = (junctionRows ?? []).map((r) => r.legislation_id)
+      if (topicLegislationIds.length > 0) {
+        query = query.in('id', topicLegislationIds)
+      } else {
+        return { items: [], total: 0 }
+      }
+    }
+  }
+
   const { data, error, count } = await query
 
   if (error) {
@@ -173,6 +191,7 @@ function buildPageUrl(
   if (filters.status) params.set('status', filters.status)
   if (filters.committee_id) params.set('committee_id', filters.committee_id)
   if (filters.sort && filters.sort !== 'most_engaged') params.set('sort', filters.sort)
+  if (filters.topic) params.set('topic', filters.topic)
   if (page > 1) params.set('page', String(page))
   const qs = params.toString()
   return qs ? `?${qs}` : '/legislation'
@@ -181,7 +200,7 @@ function buildPageUrl(
 export default async function LegislationPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; committee_id?: string; sort?: string; page?: string }>
+  searchParams: Promise<{ q?: string; status?: string; committee_id?: string; sort?: string; topic?: string; page?: string }>
 }) {
   const params = await searchParams
   const filters: Filters = {
@@ -189,10 +208,11 @@ export default async function LegislationPage({
     status: params.status,
     committee_id: params.committee_id,
     sort: params.sort,
+    topic: params.topic,
   }
   const currentPage = Math.max(1, Number(params.page) || 1)
 
-  const [{ items: legislation, total }, { statuses, committees }] = await Promise.all([
+  const [{ items: legislation, total }, { statuses, committees, topics }] = await Promise.all([
     getLegislation(filters, currentPage),
     getFilterOptions(),
   ])
@@ -220,7 +240,7 @@ export default async function LegislationPage({
           {/* Filters */}
           <div className="mt-6">
             <Suspense>
-              <LegislationFilters statuses={statuses} committees={committees} />
+              <LegislationFilters statuses={statuses} committees={committees} topics={topics} />
             </Suspense>
           </div>
 

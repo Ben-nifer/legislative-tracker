@@ -5,14 +5,17 @@ import { useCallback, useTransition } from 'react'
 import { Search, X } from 'lucide-react'
 
 type Committee = { id: string; name: string }
+type Topic = { id: string; name: string; slug: string }
 type Status = string
 
 export default function LegislationFilters({
   statuses,
   committees,
+  topics = [],
 }: {
   statuses: Status[]
   committees: Committee[]
+  topics?: Topic[]
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -23,6 +26,7 @@ export default function LegislationFilters({
   const status = searchParams.get('status') ?? ''
   const committeeId = searchParams.get('committee_id') ?? ''
   const sort = searchParams.get('sort') ?? 'most_engaged'
+  const topic = searchParams.get('topic') ?? ''
 
   const updateParam = useCallback(
     (key: string, value: string) => {
@@ -46,7 +50,7 @@ export default function LegislationFilters({
     })
   }
 
-  const hasFilters = q || status || committeeId || sort !== 'most_engaged'
+  const hasFilters = q || status || committeeId || sort !== 'most_engaged' || topic
 
   const selectClass = 'rounded border border-nyc-border bg-nyc-card px-3 py-2 text-sm text-nyc-blue outline-none transition-colors focus:border-nyc-orange focus:ring-1 focus:ring-nyc-orange'
 
@@ -88,6 +92,19 @@ export default function LegislationFilters({
           <option value="most_engaged">Most Engaged</option>
           <option value="most_recent">Most Recent</option>
         </select>
+
+        {topics.length > 0 && (
+          <select
+            value={topic}
+            onChange={(e) => updateParam('topic', e.target.value)}
+            className={selectClass}
+          >
+            <option value="">All Topics</option>
+            {topics.map((t) => (
+              <option key={t.id} value={t.slug}>{t.name}</option>
+            ))}
+          </select>
+        )}
 
         {committees.length > 0 && (
           <select

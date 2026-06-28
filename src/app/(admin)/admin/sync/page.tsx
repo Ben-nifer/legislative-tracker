@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { RefreshCw, Sparkles, BarChart2, Tag, Users, FileText, MapPin } from 'lucide-react'
-import { generateSummariesBatch, generateShortSummaries, seedTopics, runSyncSponsorships, runSyncCouncilMembers, runSyncCommitteeMemberships, runScrapeDistrictData, runSyncCommunityBoards } from '@/app/actions/admin'
+import { generateSummariesBatch, generateShortSummaries, seedTopics, runSyncSponsorships, runSyncCouncilMembers, runSyncCommitteeMemberships, runScrapeDistrictData, runSyncCommunityBoards, runSyncLegislation, runRefreshStats } from '@/app/actions/admin'
 
 function CouncilSyncCard() {
   const [state, setState] = useState<JobState>('idle')
@@ -601,21 +601,27 @@ export default function SyncPage() {
         />
 
         {/* Sync legislation from Legistar */}
-        <CronJobCard
+        <JobCard
           title="Sync Legislation"
-          description="Pull latest bills and resolutions from the NYC Council Legistar API."
+          description="Pull latest bills and resolutions from the NYC Council Legistar API. Also runs automatically at 8am and 8pm UTC."
           icon={RefreshCw}
           color="indigo"
-          url="/api/cron/sync-legislation"
+          onRun={async () => {
+            const res = await runSyncLegislation()
+            return res as Record<string, unknown>
+          }}
         />
 
         {/* Refresh stats */}
-        <CronJobCard
+        <JobCard
           title="Refresh Stats"
-          description="Recalculate trending scores, engagement counts, and view totals."
+          description="Recalculate trending scores, engagement counts, and view totals. Also runs automatically every 15 minutes."
           icon={BarChart2}
           color="emerald"
-          url="/api/cron/refresh-stats"
+          onRun={async () => {
+            const res = await runRefreshStats()
+            return res as Record<string, unknown>
+          }}
         />
 
         {/* Generate summaries + topics */}

@@ -349,12 +349,13 @@ export default async function FollowingPage() {
           ) : (
             <div className="flex flex-wrap gap-2">
               {followedTopics.map((t) => (
-                <span
+                <Link
                   key={t.id}
-                  className="rounded-full border border-nyc-orange/30 bg-nyc-orange/10 px-3 py-1 text-sm text-nyc-orange"
+                  href={`/legislation?topic=${t.slug}`}
+                  className="rounded-full border border-nyc-orange/30 bg-nyc-orange/10 px-3 py-1 text-sm text-nyc-orange transition-colors hover:border-nyc-orange/60 hover:bg-nyc-orange/20"
                 >
                   {t.name}
-                </span>
+                </Link>
               ))}
             </div>
           )}

@@ -46,7 +46,7 @@ export async function GET(request: Request) {
 
   for (const bill of bills) {
     try {
-      const { summary, topicSlugs, error: aiError } = await generateSummaryAndTopics(
+      const { summary, shortSummary, topicSlugs, error: aiError } = await generateSummaryAndTopics(
         bill.title,
         bill.official_summary,
         availableTopics
@@ -58,10 +58,10 @@ export async function GET(request: Request) {
         continue
       }
 
-      // Save the ai_summary
+      // Save ai_summary + short_summary together
       await supabase
         .from('legislation')
-        .update({ ai_summary: summary })
+        .update({ ai_summary: summary, short_summary: shortSummary ?? null })
         .eq('id', bill.id)
 
       // Wire up topic associations
