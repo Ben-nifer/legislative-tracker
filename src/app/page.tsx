@@ -2,7 +2,6 @@ import Link from 'next/link'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { ArrowRight, TrendingUp, Rss, Sparkles, MapPin } from 'lucide-react'
 import { format } from 'date-fns'
-import CouncilMemberLookup from '@/components/council/CouncilMemberLookup'
 import MemberAvatar from '@/components/council/MemberAvatar'
 
 export const revalidate = 300
@@ -270,7 +269,7 @@ export default async function HomePage() {
         <section className="border-b border-nyc-border bg-nyc-blue px-4 py-20 text-center sm:px-6 lg:px-8">
           <div className="mx-auto max-w-2xl">
             <h1 className="text-4xl font-black uppercase tracking-tight text-white sm:text-5xl">
-              NYC legislation,{' '}
+              NYC legislation,<br />
               <span className="text-nyc-orange">made accessible</span>
             </h1>
             <p className="mt-4 text-lg text-blue-200">
@@ -295,10 +294,10 @@ export default async function HomePage() {
         </section>
       )}
 
-      {/* ── Council Member — lookup or display ───────────────────── */}
-      <section className="mx-auto max-w-7xl px-4 pt-10 sm:px-6 lg:px-8">
-        <div className="max-w-xl">
-          {user && councilMember ? (
+      {/* ── Council Member — display if saved ───────────────────── */}
+      {user && councilMember && (
+        <section className="mx-auto max-w-7xl px-4 pt-10 sm:px-6 lg:px-8">
+          <div className="max-w-xl">
             <div className="rounded border border-nyc-border bg-nyc-card p-5">
               <h3 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-nyc-blue">
                 <MapPin size={15} className="text-nyc-orange" />
@@ -322,11 +321,9 @@ export default async function HomePage() {
                 </Link>
               </div>
             </div>
-          ) : (
-            <CouncilMemberLookup />
-          )}
-        </div>
-      </section>
+          </div>
+        </section>
+      )}
 
       {user ? (
         <>

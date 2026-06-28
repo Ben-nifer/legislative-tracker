@@ -92,11 +92,6 @@ export default function LegislationCard({
     bookmark_count: 0,
   }
   const cardTitle = getCardTitle(legislation)
-  const summary = isValidSummary(legislation.ai_summary)
-    ? legislation.ai_summary
-    : isValidSummary(legislation.official_summary)
-    ? legislation.official_summary
-    : null
 
   return (
     <Link
@@ -145,18 +140,9 @@ export default function LegislationCard({
       </div>
 
       {/* Title */}
-      <h3 className="mb-1.5 text-sm font-bold leading-snug text-nyc-blue group-hover:text-nyc-orange transition-colors">
+      <h3 className="mb-3 text-sm font-bold leading-snug text-nyc-blue group-hover:text-nyc-orange transition-colors">
         {cardTitle}
       </h3>
-
-      {/* Summary */}
-      {summary ? (
-        <p className="mb-3 line-clamp-2 text-xs leading-relaxed text-nyc-muted">
-          {summary}
-        </p>
-      ) : (
-        <p className="mb-3 text-xs italic text-nyc-muted/50">No summary available</p>
-      )}
 
       {/* Divider */}
       <div className="mb-3 border-t border-nyc-border" />
