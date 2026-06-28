@@ -140,7 +140,7 @@ export default async function FollowingPage() {
   })
 
   let feedItems: {
-    id: string; slug: string; file_number: string; title: string
+    id: string; slug: string; file_number: string; title: string; short_summary: string | null
     status: string; intro_date: string | null; sponsor: string
   }[] = []
 
@@ -148,7 +148,7 @@ export default async function FollowingPage() {
     const legislatorIds = followedLegislators.map((l) => l.id)
     const { data: sponsorships } = await supabase
       .from('sponsorships')
-      .select('is_primary, legislator_id, legislation:legislation(id, slug, file_number, title, status, intro_date)')
+      .select('is_primary, legislator_id, legislation:legislation(id, slug, file_number, title, short_summary, status, intro_date)')
       .in('legislator_id', legislatorIds)
       .order('legislation(intro_date)', { ascending: false })
       .limit(30)
@@ -160,7 +160,7 @@ export default async function FollowingPage() {
         if (!leg || seen.has(leg.id)) return []
         seen.add(leg.id)
         const sponsor = followedLegislators.find((l) => l.id === s.legislator_id)
-        return [{ ...leg, sponsor: sponsor?.full_name ?? '' }]
+        return [{ ...leg, short_summary: (leg as any).short_summary ?? null, sponsor: sponsor?.full_name ?? '' }]
       })
       .slice(0, 20)
   }
@@ -425,7 +425,7 @@ export default async function FollowingPage() {
                         </span>
                       )}
                     </div>
-                    <p className="line-clamp-2 text-sm text-nyc-blue">{item.title}</p>
+                    <p className="line-clamp-2 text-sm text-nyc-blue">{item.short_summary ?? item.title}</p>
                   </Link>
                 ))}
               </div>

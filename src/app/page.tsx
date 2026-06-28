@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { ArrowRight, TrendingUp, Rss, Sparkles, MapPin } from 'lucide-react'
 import { format } from 'date-fns'
 import MemberAvatar from '@/components/council/MemberAvatar'
+import CouncilMemberLookup from '@/components/council/CouncilMemberLookup'
 
 export const revalidate = 300
 
@@ -425,6 +426,13 @@ export default async function HomePage() {
         </>
       ) : (
         <>
+          {/* ── Find Your Council Member ─────────────────────────────── */}
+          <section className="mx-auto max-w-7xl px-4 pt-10 sm:px-6 lg:px-8">
+            <div className="max-w-xl">
+              <CouncilMemberLookup />
+            </div>
+          </section>
+
           {/* ── Trending (logged-out) ──────────────────────────────────── */}
           <section className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
             <div className="mb-4 flex items-center justify-between">
