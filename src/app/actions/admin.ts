@@ -3,7 +3,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { createServerSupabaseClient, createServiceClient } from '@/lib/supabase/server'
 import { summarizeLegislation } from '@/lib/ai/summarize'
-import { syncSponsorships, syncCouncilMembers, syncCommitteeMemberships } from '@/lib/legistar/sync'
+import { syncSponsorships, syncCouncilMembers, syncCommitteeMemberships, fullSync } from '@/lib/legistar/sync'
 import { scrapeAndSyncDistrictData } from '@/lib/council/scrape-districts'
 import { syncCommunityBoardsFromOpenData } from '@/lib/council/sync-community-boards'
 
@@ -162,12 +162,12 @@ export async function generateSummariesBatch(): Promise<{
     )
   )
 
-  for (const { item, summary, topicSlugs, error } of results) {
+  for (const { item, summary, shortSummary, topicSlugs, error } of results) {
     if (error && !firstError) firstError = error
     if (summary) {
       await supabase
         .from('legislation')
-        .update({ ai_summary: summary })
+        .update({ ai_summary: summary, short_summary: shortSummary ?? null })
         .eq('id', item.id)
 
       if (topicSlugs.length > 0) {
@@ -325,7 +325,7 @@ export async function generateShortSummaries(): Promise<{
       try {
         const content = item.ai_summary?.trim() || item.title
         const message = await anthropic.messages.create({
-          model: 'claude-sonnet-4-20250514',
+          model: 'claude-haiku-4-5-20251001',
           max_tokens: 64,
           messages: [
             {
@@ -347,4 +347,51 @@ export async function generateShortSummaries(): Promise<{
 
   const remaining = (totalRemaining ?? 0) - processed
   return { processed, total: totalRemaining ?? 0, done: remaining <= 0 }
+}
+
+/**
+ * Runs the full legislation sync from Legistar (council members, bills, sponsorships, stats).
+ * Replaces the browser-side CronJobCard fetch so no NEXT_PUBLIC secret is needed.
+ */
+export async function runSyncLegislation(): Promise<{
+  legislators?: number
+  legislation?: number
+  sponsorships?: number
+  stats?: number
+  error?: string
+}> {
+  try {
+    await assertAdmin()
+  } catch (e) {
+    return { error: String(e) }
+  }
+  try {
+    const results = await fullSync()
+    return results
+  } catch (e) {
+    return { error: String(e) }
+  }
+}
+
+/**
+ * Refreshes legislation stats (trending scores, engagement counts).
+ * Replaces the browser-side CronJobCard fetch so no NEXT_PUBLIC secret is needed.
+ */
+export async function runRefreshStats(): Promise<{
+  refreshed_at?: string
+  error?: string
+}> {
+  try {
+    await assertAdmin()
+  } catch (e) {
+    return { error: String(e) }
+  }
+  try {
+    const supabase = createServiceClient()
+    const { error } = await supabase.rpc('refresh_legislation_stats')
+    if (error) return { error: error.message }
+    return { refreshed_at: new Date().toISOString() }
+  } catch (e) {
+    return { error: String(e) }
+  }
 }

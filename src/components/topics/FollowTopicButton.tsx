@@ -41,8 +41,8 @@ export default function FollowTopicButton({
       className={[
         'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors disabled:opacity-50',
         following
-          ? 'border-indigo-500/50 bg-indigo-500/20 text-indigo-300'
-          : 'border-slate-700 text-slate-400 hover:border-slate-600 hover:text-slate-200',
+          ? 'border-nyc-orange/50 bg-nyc-orange/10 text-nyc-orange'
+          : 'border-nyc-border text-nyc-muted hover:border-nyc-border-light hover:text-nyc-blue',
       ].join(' ')}
     >
       {following ? <Check size={12} /> : <Plus size={12} />}

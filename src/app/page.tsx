@@ -1,8 +1,9 @@
 import Link from 'next/link'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { ArrowRight, TrendingUp, Rss, Sparkles } from 'lucide-react'
+import { ArrowRight, TrendingUp, Rss, Sparkles, MapPin } from 'lucide-react'
 import { format } from 'date-fns'
 import CouncilMemberLookup from '@/components/council/CouncilMemberLookup'
+import MemberAvatar from '@/components/council/MemberAvatar'
 
 export const revalidate = 300
 
@@ -61,6 +62,7 @@ async function getForYouLegislation(userId: string, supabase: Awaited<ReturnType
   ]
 
   let candidates: LegislationRow[] = []
+  let followedTopicIds: string[] = []
 
   // Step 3 — fetch from engaged committees
   if (committeeIds.length > 0) {
@@ -80,7 +82,43 @@ async function getForYouLegislation(userId: string, supabase: Awaited<ReturnType
     candidates = (data ?? []) as unknown as LegislationRow[]
   }
 
-  // Backfill with trending if fewer than 6
+  // Step 3b — fill gaps from followed topics
+  if (candidates.length < 6) {
+    const { data: topicFollowRows } = await supabase
+      .from('topic_follows')
+      .select('topic_id')
+      .eq('user_id', userId)
+
+    followedTopicIds = (topicFollowRows ?? []).map((r) => r.topic_id)
+
+    if (followedTopicIds.length > 0) {
+      const needed = 6 - candidates.length
+      const existingIds = [...excludedIds, ...candidates.map((c) => c.id)]
+
+      const { data: topicLegIds } = await supabase
+        .from('legislation_topics')
+        .select('legislation_id')
+        .in('topic_id', followedTopicIds)
+
+      const topicLegislationIds = (topicLegIds ?? [])
+        .map((r) => r.legislation_id)
+        .filter((id) => !existingIds.includes(id))
+
+      if (topicLegislationIds.length > 0) {
+        const { data: topicBills } = await supabase
+          .from('legislation')
+          .select('id, slug, file_number, title, status, type, intro_date, legislation_stats!inner(trending_score)')
+          .eq('type', 'introduction')
+          .in('id', topicLegislationIds)
+          .order('legislation_stats(trending_score)', { ascending: false })
+          .limit(needed)
+
+        candidates = [...candidates, ...(topicBills ?? []) as unknown as LegislationRow[]]
+      }
+    }
+  }
+
+  // Step 4 — backfill with trending if still fewer than 6
   if (candidates.length < 6) {
     const needed = 6 - candidates.length
     const existingIds = [...excludedIds, ...candidates.map((c) => c.id)]
@@ -100,7 +138,7 @@ async function getForYouLegislation(userId: string, supabase: Awaited<ReturnType
     candidates = [...candidates, ...(filtered as unknown as LegislationRow[])]
   }
 
-  return { candidates, hasEngagement: committeeIds.length > 0 }
+  return { candidates, hasEngagement: committeeIds.length > 0 || followedTopicIds.length > 0 }
 }
 
 export default async function HomePage() {
@@ -128,7 +166,11 @@ export default async function HomePage() {
       .order('trending_score', { ascending: false })
       .limit(10),
     user
-      ? supabase.from('user_profiles').select('display_name, username').eq('id', user.id).single()
+      ? supabase
+          .from('user_profiles')
+          .select('display_name, username, community_board, council_member:legislators(id, full_name, slug, district, borough, photo_url)')
+          .eq('id', user.id)
+          .single()
       : Promise.resolve({ data: null, error: null }),
   ])
 
@@ -200,8 +242,16 @@ export default async function HomePage() {
     feedItems = [...legislatorItems, ...stanceItems].slice(0, 6)
   }
 
-  const profileData = (profile as { data: { display_name: string | null; username: string | null } | null } | null)?.data
-  const displayName = profileData?.display_name || profileData?.username || 'there'
+  type CouncilMemberData = { id: string; full_name: string; slug: string; district: number; borough: string | null; photo_url: string | null }
+  type ProfileData = { display_name: string | null; username: string | null; community_board: string | null; council_member: CouncilMemberData | CouncilMemberData[] | null }
+  const profileData = (profile as { data: ProfileData | null } | null)?.data
+  const rawCouncilMember = profileData?.council_member
+  const councilMember = rawCouncilMember
+    ? (Array.isArray(rawCouncilMember) ? rawCouncilMember[0] : rawCouncilMember) ?? null
+    : null
+  const firstName = profileData?.display_name
+    ? profileData.display_name.trim().split(/\s+/)[0]
+    : (profileData?.username ?? 'there')
 
   return (
     <main className="min-h-screen bg-nyc-bg">
@@ -211,7 +261,7 @@ export default async function HomePage() {
         <section className="border-b border-nyc-border bg-nyc-blue px-4 py-6 sm:px-6 lg:px-8">
           <div className="mx-auto max-w-7xl">
             <h1 className="text-xl font-black uppercase tracking-widest text-white">
-              Welcome back, {displayName}
+              Welcome back, {firstName}
             </h1>
           </div>
         </section>
@@ -245,10 +295,36 @@ export default async function HomePage() {
         </section>
       )}
 
-      {/* ── Find Your Council Member — visible to all ─────────────── */}
+      {/* ── Council Member — lookup or display ───────────────────── */}
       <section className="mx-auto max-w-7xl px-4 pt-10 sm:px-6 lg:px-8">
         <div className="max-w-xl">
-          <CouncilMemberLookup />
+          {user && councilMember ? (
+            <div className="rounded border border-nyc-border bg-nyc-card p-5">
+              <h3 className="mb-3 flex items-center gap-2 text-sm font-bold uppercase tracking-wide text-nyc-blue">
+                <MapPin size={15} className="text-nyc-orange" />
+                Your Council Member
+              </h3>
+              <div className="flex items-center gap-3">
+                <MemberAvatar name={councilMember.full_name} photoUrl={councilMember.photo_url} size="sm" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-nyc-blue">{councilMember.full_name}</p>
+                  <p className="text-xs text-nyc-muted">
+                    District {councilMember.district}
+                    {councilMember.borough ? ` · ${councilMember.borough}` : ''}
+                    {profileData?.community_board ? ` · ${profileData.community_board}` : ''}
+                  </p>
+                </div>
+                <Link
+                  href={`/council-members/${councilMember.slug}`}
+                  className="shrink-0 rounded border border-nyc-blue/30 px-3 py-1.5 text-xs font-bold text-nyc-blue transition-colors hover:bg-nyc-blue hover:text-white"
+                >
+                  View profile →
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <CouncilMemberLookup />
+          )}
         </div>
       </section>
 
