@@ -306,7 +306,7 @@ export async function syncSponsorships(
     .select('id, legistar_url', { count: 'exact' })
     .not('legistar_url', 'is', null)
     .not('intro_date', 'is', null)
-    .order('intro_date', { ascending: true })
+    .order('intro_date', { ascending: false })
     .range(offset, offset + concurrency - 1)
 
   if (!batch || batch.length === 0) {
