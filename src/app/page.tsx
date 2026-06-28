@@ -25,6 +25,7 @@ type LegislationRow = {
   slug: string
   file_number: string
   title: string
+  short_summary?: string | null
   status: string
   type: string | null
   intro_date: string | null
@@ -68,7 +69,7 @@ async function getForYouLegislation(userId: string, supabase: Awaited<ReturnType
   if (committeeIds.length > 0) {
     const query = supabase
       .from('legislation')
-      .select('id, slug, file_number, title, status, type, intro_date, legislation_stats!inner(trending_score)')
+      .select('id, slug, file_number, title, short_summary, status, type, intro_date, legislation_stats!inner(trending_score)')
       .eq('type', 'introduction')
       .in('committee_id', committeeIds)
       .order('legislation_stats(trending_score)', { ascending: false })
@@ -107,7 +108,7 @@ async function getForYouLegislation(userId: string, supabase: Awaited<ReturnType
       if (topicLegislationIds.length > 0) {
         const { data: topicBills } = await supabase
           .from('legislation')
-          .select('id, slug, file_number, title, status, type, intro_date, legislation_stats!inner(trending_score)')
+          .select('id, slug, file_number, title, short_summary, status, type, intro_date, legislation_stats!inner(trending_score)')
           .eq('type', 'introduction')
           .in('id', topicLegislationIds)
           .order('legislation_stats(trending_score)', { ascending: false })
@@ -125,7 +126,7 @@ async function getForYouLegislation(userId: string, supabase: Awaited<ReturnType
 
     const backfillQuery = supabase
       .from('legislation')
-      .select('id, slug, file_number, title, status, type, intro_date, legislation_stats!inner(trending_score)')
+      .select('id, slug, file_number, title, short_summary, status, type, intro_date, legislation_stats!inner(trending_score)')
       .eq('type', 'introduction')
       .order('legislation_stats(trending_score)', { ascending: false })
       .limit(needed + existingIds.length)
@@ -152,7 +153,7 @@ export default async function HomePage() {
   ] = await Promise.all([
     supabase
       .from('legislation')
-      .select('id, slug, file_number, title, status, type, intro_date, ai_summary')
+      .select('id, slug, file_number, title, short_summary, status, type, intro_date, ai_summary')
       .eq('type', 'introduction')
       .order('intro_date', { ascending: false })
       .limit(5),
@@ -160,7 +161,7 @@ export default async function HomePage() {
       .from('legislation_stats')
       .select(`
         support_count, oppose_count, neutral_count, comment_count, trending_score,
-        legislation!inner(id, slug, file_number, title, status, type)
+        legislation!inner(id, slug, file_number, title, short_summary, status, type)
       `)
       .not('trending_score', 'is', null)
       .order('trending_score', { ascending: false })
@@ -211,7 +212,7 @@ export default async function HomePage() {
       followedLegislatorIds.length > 0
         ? supabase
             .from('sponsorships')
-            .select('legislator_id, legislation:legislation(id, slug, file_number, title, status, type, intro_date)')
+            .select('legislator_id, legislation:legislation(id, slug, file_number, title, short_summary, status, type, intro_date)')
             .in('legislator_id', followedLegislatorIds)
             .order('legislation(intro_date)', { ascending: false })
             .limit(30)
@@ -408,7 +409,7 @@ export default async function HomePage() {
                       </span>
                       <span className="font-mono text-xs text-nyc-muted">{leg.file_number}</span>
                     </div>
-                    <p className="line-clamp-2 text-sm font-semibold text-nyc-blue">{leg.title}</p>
+                    <p className="line-clamp-2 text-sm font-semibold text-nyc-blue">{leg.short_summary ?? leg.title}</p>
                     <div className="mt-2 flex items-center gap-3 text-xs">
                       <span className="font-bold text-emerald-600">{row.support_count ?? 0} for</span>
                       <span className="font-bold text-red-600">{row.oppose_count ?? 0} against</span>
@@ -461,7 +462,7 @@ export default async function HomePage() {
                       </span>
                       <span className="font-mono text-xs text-nyc-muted">{leg.file_number}</span>
                     </div>
-                    <p className="line-clamp-2 text-sm font-semibold text-nyc-blue">{leg.title}</p>
+                    <p className="line-clamp-2 text-sm font-semibold text-nyc-blue">{leg.short_summary ?? leg.title}</p>
                     <div className="mt-2 flex items-center gap-3 text-xs">
                       <span className="font-bold text-emerald-600">{row.support_count ?? 0} for</span>
                       <span className="font-bold text-red-600">{row.oppose_count ?? 0} against</span>
@@ -557,7 +558,7 @@ function MiniCard({
           </span>
         )}
       </div>
-      <p className="line-clamp-2 text-sm font-semibold text-nyc-blue">{item.title}</p>
+      <p className="line-clamp-2 text-sm font-semibold text-nyc-blue">{item.short_summary ?? item.title}</p>
       {showSummary && item.ai_summary && (
         <p className="mt-1.5 line-clamp-2 text-xs text-nyc-muted">{item.ai_summary}</p>
       )}

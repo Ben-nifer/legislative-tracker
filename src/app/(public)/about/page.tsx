@@ -76,14 +76,14 @@ export default function AboutPage() {
               src="/about/IMG_8587.JPG"
               alt="Ben Listman and Yosef Kessler"
               fill
-              className="object-cover"
+              className="object-cover object-[center_60%]"
             />
           </div>
           <div className="space-y-4">
             {FOUNDERS.map((founder) => (
               <div key={founder.name}>
                 <p className="font-bold text-white">{founder.name}</p>
-                <p className="mt-1 text-sm">{founder.bio}</p>
+                <p className="mt-1">{founder.bio}</p>
               </div>
             ))}
           </div>
