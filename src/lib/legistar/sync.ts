@@ -331,7 +331,8 @@ export async function syncSponsorships(
   // Fetch sponsors for each bill concurrently
   const results = await Promise.allSettled(
     toFetch.map(async (item) => {
-      const matterId = new URL(item.legistar_url!).searchParams.get('ID')
+      const idMatch = item.legistar_url!.match(/[?&]id=(\d+)/i)
+      const matterId = idMatch?.[1]
       if (!matterId) return []
       const sponsors = await legistar.getMatterSponsors(Number(matterId))
       return sponsors.map((s) => ({
