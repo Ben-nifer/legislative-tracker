@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createServerSupabaseClient, createServiceClient } from '@/lib/supabase/server'
+import { followRateLimit } from '@/lib/rate-limit'
 
 // ── Users ─────────────────────────────────────────────────────────────────────
 
@@ -12,6 +13,9 @@ export async function followUser(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
   if (user.id === targetUserId) return { error: 'Cannot follow yourself' }
+
+  const { success } = await followRateLimit.limit(user.id)
+  if (!success) return { error: 'Too many requests. Please try again later.' }
 
   const { error } = await supabase
     .from('user_follows')
@@ -60,6 +64,9 @@ export async function followLegislator(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
 
+  const { success } = await followRateLimit.limit(user.id)
+  if (!success) return { error: 'Too many requests. Please try again later.' }
+
   const { error } = await supabase
     .from('legislator_follows')
     .insert({ user_id: user.id, legislator_id: legislatorId })
@@ -99,6 +106,9 @@ export async function followLegislation(
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
+
+  const { success } = await followRateLimit.limit(user.id)
+  if (!success) return { error: 'Too many requests. Please try again later.' }
 
   const { error } = await supabase
     .from('legislation_follows')
@@ -186,6 +196,9 @@ export async function followTopic(
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Not authenticated' }
+
+  const { success } = await followRateLimit.limit(user.id)
+  if (!success) return { error: 'Too many requests. Please try again later.' }
 
   const { error } = await supabase
     .from('topic_follows')

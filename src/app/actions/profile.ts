@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { geocodeRateLimit } from '@/lib/rate-limit'
 
 function toSlug(text: string): string {
   return text
@@ -158,6 +159,13 @@ export async function lookupAddressDistrict(address: string): Promise<{
   communityBoard?: string
   error?: string
 }> {
+  const supabaseForAuth = await createServerSupabaseClient()
+  const { data: { user } } = await supabaseForAuth.auth.getUser()
+  if (user) {
+    const { success } = await geocodeRateLimit.limit(user.id)
+    if (!success) return { error: 'Too many requests. Please try again later.' }
+  }
+
   try {
     // Step 1: GeoSearch to resolve address → BBL
     const geoRes = await fetch(

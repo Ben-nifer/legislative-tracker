@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createServerSupabaseClient, createServiceClient } from '@/lib/supabase/server'
+import { stanceRateLimit } from '@/lib/rate-limit'
 
 export type Stance = 'support' | 'oppose' | 'neutral'
 
@@ -43,6 +44,9 @@ export async function setStance(
   } = await supabase.auth.getUser()
 
   if (!user) return { error: 'Not authenticated' }
+
+  const { success } = await stanceRateLimit.limit(user.id)
+  if (!success) return { error: 'Too many requests. Please try again later.' }
 
   if (stance === null) {
     const { error } = await supabase

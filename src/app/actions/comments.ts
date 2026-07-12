@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { checkModeration } from '@/lib/moderation/check'
+import { commentRateLimit, voteRateLimit } from '@/lib/rate-limit'
 
 export type NewComment = {
   id: string
@@ -23,6 +24,9 @@ export async function addComment(
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'You must be signed in to comment' }
+
+  const { success } = await commentRateLimit.limit(user.id)
+  if (!success) return { error: 'Too many comments. Please wait before posting again.' }
 
   const { flagged, categories } = await checkModeration(body)
   if (flagged) {
@@ -118,6 +122,9 @@ export async function voteComment(
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'You must be signed in to vote' }
+
+  const { success } = await voteRateLimit.limit(user.id)
+  if (!success) return { error: 'Too many requests. Please try again later.' }
 
   // Check existing vote before mutating to avoid duplicate upvote notifications
   const { data: existing } = await supabase

@@ -10,7 +10,7 @@ export const metadata = {
 const FOUNDERS = [
   {
     name: 'Ben Listman',
-    bio: 'Holds a Master\'s in Urban Planning from NYU Wagner and serves on Manhattan Community Board 3. He knows more about zoning text amendments than any person should reasonably be expected to know, and he\'s genuinely excited about it.',
+    bio: "Holds a Master's in Urban Planning from NYU Wagner and works in the Transportation Practice Group at Windels Marx, where he researches transportation policy, regulation, and emerging mobility issues for public and private sector clients. He also serves on Manhattan Community Board 2. He enjoys making New York's transportation and planning issues a little less mysterious, from explaining why that bike lane was built to how neighborhood decisions get made.",
   },
   {
     name: 'Yosef Kessler',
