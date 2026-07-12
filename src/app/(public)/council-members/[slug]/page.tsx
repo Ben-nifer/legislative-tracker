@@ -435,7 +435,7 @@ export default async function CouncilMemberPage({
           <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-nyc-muted">
             Community Standing
           </h2>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {/* Popularity rank */}
             <div className="rounded border border-nyc-border bg-nyc-card-hover p-3 text-center">
               <div className="text-2xl font-black text-nyc-orange">
@@ -469,7 +469,14 @@ export default async function CouncilMemberPage({
               </div>
             </div>
 
-
+            {/* Bills sponsored */}
+            <div className="rounded border border-nyc-border bg-nyc-card-hover p-3 text-center">
+              <div className="text-2xl font-black text-nyc-blue">
+                {primaryBills.length}
+              </div>
+              <div className="text-xs text-nyc-muted mt-0.5">as primary sponsor</div>
+              <div className="text-xs font-semibold text-nyc-blue mt-1">Bills Sponsored</div>
+            </div>
           </div>
         </section>
 
