@@ -10,7 +10,7 @@ export const metadata = {
 const FOUNDERS = [
   {
     name: 'Ben Listman',
-    bio: "Holds a Master's in Urban Planning from NYU Wagner and works in the Transportation Practice Group at Windels Marx, where he researches transportation policy, regulation, and emerging mobility issues for public and private sector clients. He also serves on Manhattan Community Board 2. He enjoys making New York's transportation and planning issues a little less mysterious, from explaining why that bike lane was built to how neighborhood decisions get made.",
+    bio: "Holds a Master's in Urban Planning from NYU Wagner and works in the Transportation Practice Group at Windels Marx, researching transportation policy, regulation, and emerging mobility. He also serves on Manhattan Community Board 2. He enjoys demystifying New York's transportation and planning issues.",
   },
   {
     name: 'Yosef Kessler',

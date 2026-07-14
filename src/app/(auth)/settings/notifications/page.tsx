@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import DigestToggle from './DigestToggle'
+import NotificationToggles from './NotificationToggles'
 import { Bell } from 'lucide-react'
 
 export const metadata = {
@@ -17,9 +18,16 @@ export default async function NotificationSettingsPage() {
 
   const { data: profile } = await supabase
     .from('user_profiles')
-    .select('display_name, email_digests_enabled')
+    .select('display_name, email_digests_enabled, notification_preferences')
     .eq('id', user.id)
     .single()
+
+  const notifPrefs = {
+    hearing_alerts: profile?.notification_preferences?.hearing_alerts ?? true,
+    bill_updates: profile?.notification_preferences?.bill_updates ?? true,
+    comment_engagement: profile?.notification_preferences?.comment_engagement ?? true,
+    new_followers: profile?.notification_preferences?.new_followers ?? true,
+  }
 
   return (
     <main className="min-h-screen bg-nyc-bg">
@@ -34,6 +42,9 @@ export default async function NotificationSettingsPage() {
         </div>
 
         <div className="rounded border border-nyc-border bg-nyc-card divide-y divide-nyc-border">
+
+          {/* In-app notification toggles */}
+          <NotificationToggles initialPrefs={notifPrefs} />
 
           {/* Daily digest row */}
           <div className="flex items-start justify-between gap-6 p-5">

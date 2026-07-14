@@ -24,12 +24,19 @@ export async function followUser(
   if (error) return { error: error.message }
 
   // Notify the target user
+  const { data: actorProfile } = await supabase
+    .from('user_profiles')
+    .select('display_name, username')
+    .eq('id', user.id)
+    .single()
+
   await supabase.from('notifications').insert({
     user_id: targetUserId,
     type: 'new_follower',
     actor_user_id: user.id,
-    title: 'New follower',
-    body: 'Someone started following you',
+    title: `${actorProfile?.display_name ?? 'Someone'} started following you`,
+    body: null,
+    url: actorProfile?.username ? `/users/${actorProfile.username}` : null,
   })
 
   revalidatePath(`/users/[username]`, 'page')

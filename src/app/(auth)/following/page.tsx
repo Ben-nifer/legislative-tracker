@@ -46,7 +46,7 @@ export default async function FollowingPage() {
       .order('created_at', { ascending: false }),
     supabase
       .from('user_follows')
-      .select('following_id, profile:user_profiles!user_follows_following_id_fkey(id, username, display_name, bio)')
+      .select('following_id')
       .eq('follower_id', user.id)
       .order('created_at', { ascending: false }),
     supabase
@@ -66,6 +66,14 @@ export default async function FollowingPage() {
       .eq('user_id', user.id)
       .order('created_at', { ascending: false }),
   ])
+
+  const followingIds = (userFollows ?? []).map((f) => f.following_id)
+  const { data: followedUserProfiles } = followingIds.length > 0
+    ? await supabase
+        .from('user_profiles')
+        .select('id, username, display_name, bio')
+        .in('id', followingIds)
+    : { data: [] }
 
   const followedLegislationIds = (legislationFollows ?? []).map((f) => f.legislation_id)
   const { data: upcomingEvents } = followedLegislationIds.length > 0
@@ -134,8 +142,9 @@ export default async function FollowingPage() {
   }
   const sortedDates = [...eventsByDate.keys()].sort()
 
-  const followedUsers = (userFollows ?? []).flatMap((f) => {
-    const profile = Array.isArray(f.profile) ? f.profile[0] : f.profile
+  const profileMap = new Map((followedUserProfiles ?? []).map((p) => [p.id, p]))
+  const followedUsers = followingIds.flatMap((id) => {
+    const profile = profileMap.get(id)
     return profile ? [profile] : []
   })
 
