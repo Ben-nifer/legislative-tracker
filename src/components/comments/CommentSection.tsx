@@ -47,7 +47,7 @@ export default function CommentSection({
       setError(result.error)
     } else if (result.comment) {
       setComments((prev) => [
-        { ...result.comment!, vote_score: 0, user_vote: null, replies: [] },
+        { ...result.comment!, vote_score: 0, user_vote: null, isOwn: true, updated_at: result.comment!.created_at, replies: [] },
         ...prev,
       ])
       setBody('')
@@ -63,7 +63,7 @@ export default function CommentSection({
       setComments((prev) =>
         prev.map((c) =>
           c.id === parentId
-            ? { ...c, replies: [...c.replies, { ...result.comment!, vote_score: 0, user_vote: null, replies: [] }] }
+            ? { ...c, replies: [...c.replies, { ...result.comment!, vote_score: 0, user_vote: null, isOwn: true, updated_at: result.comment!.created_at, replies: [] }] }
             : c
         )
       )

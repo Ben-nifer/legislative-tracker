@@ -1,19 +1,22 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { formatDistanceToNow } from 'date-fns'
-import { Flag, ThumbsUp, ThumbsDown, Minus, MessageSquare } from 'lucide-react'
+import { Flag, ThumbsUp, ThumbsDown, Minus, MessageSquare, Pencil, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import VoteButtons from './VoteButtons'
-import { reportComment } from '@/app/actions/comments'
+import { reportComment, editComment, deleteComment } from '@/app/actions/comments'
 
 export type CommentData = {
   id: string
   body: string
   created_at: string
+  updated_at: string
   stance_context: 'support' | 'oppose' | 'neutral' | null
   vote_score: number
   user_vote: 1 | -1 | null
+  isOwn: boolean
   author: {
     username: string
     display_name: string
@@ -40,6 +43,7 @@ export default function CommentItem({
   onReply: (parentId: string, body: string) => Promise<string | undefined>
   depth?: number
 }) {
+  const router = useRouter()
   const [showReply, setShowReply] = useState(false)
   const [showReplies, setShowReplies] = useState(true)
   const [replyBody, setReplyBody] = useState('')
@@ -48,10 +52,48 @@ export default function CommentItem({
   const [reported, setReported] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
 
+  const [localBody, setLocalBody] = useState(comment.body)
+  const [isEdited, setIsEdited] = useState(comment.updated_at !== comment.created_at)
+  const [showEdit, setShowEdit] = useState(false)
+  const [editBody, setEditBody] = useState(comment.body)
+  const [editLoading, setEditLoading] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
+  const [deleted, setDeleted] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+
   async function handleReport() {
     if (reported) return
     await reportComment(comment.id)
     setReported(true)
+  }
+
+  async function handleEditSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editBody.trim() || editLoading) return
+    setEditLoading(true)
+    setEditError(null)
+    const result = await editComment(comment.id, editBody.trim())
+    setEditLoading(false)
+    if (result.error) {
+      setEditError(result.error)
+    } else {
+      setLocalBody(editBody.trim())
+      setIsEdited(true)
+      setShowEdit(false)
+      router.refresh()
+    }
+  }
+
+  async function handleDelete() {
+    if (deleteLoading) return
+    setDeleteLoading(true)
+    const result = await deleteComment(comment.id)
+    if (result.error) {
+      setDeleteLoading(false)
+    } else {
+      setDeleted(true)
+      router.refresh()
+    }
   }
 
   async function handleReplySubmit(e: React.FormEvent) {
@@ -69,6 +111,8 @@ export default function CommentItem({
       setShowReplies(true)
     }
   }
+
+  if (deleted) return null
 
   const initials = comment.author.display_name
     .split(' ')
@@ -139,11 +183,55 @@ export default function CommentItem({
           ) : (
             <>
               {/* Body */}
-              <p className="text-sm leading-relaxed text-nyc-blue whitespace-pre-wrap break-words">
-                {comment.body}
-              </p>
+              {showEdit ? (
+                <form onSubmit={handleEditSubmit} className="space-y-2">
+                  <textarea
+                    value={editBody}
+                    onChange={(e) => {
+                      setEditBody(e.target.value)
+                      e.target.style.height = 'auto'
+                      e.target.style.height = e.target.scrollHeight + 'px'
+                    }}
+                    onKeyDown={(e) => {
+                      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') handleEditSubmit(e as any)
+                    }}
+                    rows={3}
+                    maxLength={2000}
+                    autoFocus
+                    className="w-full resize-none overflow-hidden rounded border border-nyc-border bg-nyc-card px-3 py-2 text-sm text-nyc-blue placeholder-nyc-muted focus:border-nyc-orange focus:outline-none focus:ring-1 focus:ring-nyc-orange/30 transition-colors"
+                  />
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-nyc-muted/60">{editBody.length}/2000 · ⌘↵ to save</p>
+                    <div className="flex items-center gap-2">
+                      {editError && <p className="text-xs text-red-500">{editError}</p>}
+                      <button
+                        type="button"
+                        onClick={() => { setShowEdit(false); setEditBody(localBody); setEditError(null) }}
+                        className="text-xs text-nyc-muted hover:text-nyc-blue transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={editLoading || !editBody.trim()}
+                        className="rounded bg-nyc-orange px-3 py-1 text-xs font-medium text-white hover:bg-nyc-orange-hover disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+                      >
+                        {editLoading ? 'Saving…' : 'Save'}
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              ) : (
+                <p className="text-sm leading-relaxed text-nyc-blue whitespace-pre-wrap break-words">
+                  {localBody}
+                  {isEdited && (
+                    <span className="ml-1.5 text-xs text-nyc-muted/50">(edited)</span>
+                  )}
+                </p>
+              )}
 
               {/* Action bar */}
+              {!showEdit && (
               <div className="mt-2.5 flex flex-wrap items-center gap-3">
                 <VoteButtons
                   commentId={comment.id}
@@ -176,19 +264,39 @@ export default function CommentItem({
                   </button>
                 )}
 
-                <div className="ml-auto">
-                  {!reported ? (
-                    <button
-                      onClick={handleReport}
-                      className="flex items-center gap-1 text-xs text-nyc-muted/20 opacity-0 transition-opacity group-hover:opacity-100 hover:text-red-500"
-                    >
-                      <Flag size={11} /> Report
-                    </button>
-                  ) : (
-                    <span className="text-xs text-nyc-muted/50">Reported</span>
+                <div className="ml-auto flex items-center gap-3">
+                  {comment.isOwn && (
+                    <>
+                      <button
+                        onClick={() => { setShowEdit(true); setEditBody(localBody) }}
+                        className="flex items-center gap-1 text-xs text-nyc-muted/40 opacity-0 transition-opacity group-hover:opacity-100 hover:text-nyc-blue"
+                      >
+                        <Pencil size={11} /> Edit
+                      </button>
+                      <button
+                        onClick={handleDelete}
+                        disabled={deleteLoading}
+                        className="flex items-center gap-1 text-xs text-nyc-muted/40 opacity-0 transition-opacity group-hover:opacity-100 hover:text-red-500 disabled:cursor-not-allowed"
+                      >
+                        <Trash2 size={11} /> {deleteLoading ? 'Deleting…' : 'Delete'}
+                      </button>
+                    </>
+                  )}
+                  {!comment.isOwn && (
+                    !reported ? (
+                      <button
+                        onClick={handleReport}
+                        className="flex items-center gap-1 text-xs text-nyc-muted/20 opacity-0 transition-opacity group-hover:opacity-100 hover:text-red-500"
+                      >
+                        <Flag size={11} /> Report
+                      </button>
+                    ) : (
+                      <span className="text-xs text-nyc-muted/50">Reported</span>
+                    )
                   )}
                 </div>
               </div>
+              )}
 
               {/* Inline reply form */}
               {showReply && (

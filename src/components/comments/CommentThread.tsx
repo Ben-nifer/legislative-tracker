@@ -6,6 +6,7 @@ type RawComment = {
   id: string
   body: string
   created_at: string
+  updated_at: string
   stance_context: 'support' | 'oppose' | 'neutral' | null
   parent_comment_id: string | null
   user_id: string
@@ -26,6 +27,7 @@ export default async function CommentThread({
       id,
       body,
       created_at,
+      updated_at,
       stance_context,
       parent_comment_id,
       user_id,
@@ -61,9 +63,11 @@ export default async function CommentThread({
       id: r.id,
       body: r.body,
       created_at: r.created_at,
+      updated_at: r.updated_at,
       stance_context: r.stance_context,
       vote_score: voteScore,
       user_vote: userVoteRow ? (userVoteRow.vote as 1 | -1) : null,
+      isOwn: user ? r.user_id === user.id : false,
       author: {
         username: profile?.username ?? 'unknown',
         display_name: profile?.display_name ?? 'Unknown User',

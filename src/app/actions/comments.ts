@@ -188,3 +188,50 @@ export async function reportComment(
   if (error) return { error: error.message }
   return {}
 }
+
+export async function editComment(
+  commentId: string,
+  newBody: string
+): Promise<{ error?: string }> {
+  if (!newBody.trim()) return { error: 'Comment cannot be empty' }
+  if (newBody.length > 2000) return { error: 'Comment is too long (max 2000 characters)' }
+
+  const supabase = await createServerSupabaseClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'You must be signed in to edit' }
+
+  const { flagged, categories } = await checkModeration(newBody)
+  if (flagged) {
+    return {
+      error: `Your comment was flagged for: ${categories.join(', ')}. Please revise and try again.`,
+    }
+  }
+
+  const { error } = await supabase
+    .from('comments')
+    .update({ body: newBody.trim(), updated_at: new Date().toISOString() })
+    .eq('id', commentId)
+    .eq('user_id', user.id)
+
+  if (error) return { error: error.message }
+  revalidatePath('/legislation', 'layout')
+  return {}
+}
+
+export async function deleteComment(
+  commentId: string
+): Promise<{ error?: string }> {
+  const supabase = await createServerSupabaseClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'You must be signed in to delete' }
+
+  const { error } = await supabase
+    .from('comments')
+    .delete()
+    .eq('id', commentId)
+    .eq('user_id', user.id)
+
+  if (error) return { error: error.message }
+  revalidatePath('/legislation', 'layout')
+  return {}
+}
