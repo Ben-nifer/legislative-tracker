@@ -15,21 +15,30 @@ export default async function FollowersPage() {
 
   if (!user) redirect('/login?next=/followers')
 
-  const { data: followersData } = await supabase
-    .from('user_follows')
-    .select('follower_id, profile:user_profiles!user_follows_follower_id_fkey(id, username, display_name, bio)')
-    .eq('following_id', user.id)
-    .order('created_at', { ascending: false })
+  const [{ data: followersData }, { data: myFollowingData }] = await Promise.all([
+    supabase
+      .from('user_follows')
+      .select('follower_id')
+      .eq('following_id', user.id)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('user_follows')
+      .select('following_id')
+      .eq('follower_id', user.id),
+  ])
 
-  const { data: myFollowingData } = await supabase
-    .from('user_follows')
-    .select('following_id')
-    .eq('follower_id', user.id)
+  const followerIds = (followersData ?? []).map((f) => f.follower_id)
+  const { data: followerProfiles } = followerIds.length > 0
+    ? await supabase
+        .from('user_profiles')
+        .select('id, username, display_name, bio')
+        .in('id', followerIds)
+    : { data: [] }
 
   const myFollowingIds = new Set((myFollowingData ?? []).map((f) => f.following_id))
-
-  const followers = (followersData ?? []).flatMap((f) => {
-    const profile = Array.isArray(f.profile) ? f.profile[0] : f.profile
+  const profileMap = new Map((followerProfiles ?? []).map((p) => [p.id, p]))
+  const followers = followerIds.flatMap((id) => {
+    const profile = profileMap.get(id)
     return profile ? [{ ...profile, followsYouBack: myFollowingIds.has(profile.id) }] : []
   })
 

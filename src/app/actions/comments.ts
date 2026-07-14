@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServerSupabaseClient, createServiceClient } from '@/lib/supabase/server'
 import { checkModeration } from '@/lib/moderation/check'
 import { commentRateLimit, voteRateLimit } from '@/lib/rate-limit'
 
@@ -86,7 +86,7 @@ export async function addComment(
       .single()
 
     if (parent && parent.user_id !== user.id) {
-      await supabase.from('notifications').insert({
+      await createServiceClient().from('notifications').insert({
         user_id: parent.user_id,
         type: 'comment_reply',
         title: `${profile?.display_name ?? 'Someone'} replied to your comment`,
@@ -157,7 +157,7 @@ export async function voteComment(
       const legData = Array.isArray(comment.legislation)
         ? comment.legislation[0]
         : comment.legislation
-      await supabase.from('notifications').insert({
+      await createServiceClient().from('notifications').insert({
         user_id: comment.user_id,
         type: 'comment_upvote',
         title: 'Your comment was upvoted',

@@ -30,7 +30,7 @@ export async function followUser(
     .eq('id', user.id)
     .single()
 
-  await supabase.from('notifications').insert({
+  await createServiceClient().from('notifications').insert({
     user_id: targetUserId,
     type: 'new_follower',
     actor_user_id: user.id,
