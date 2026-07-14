@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { MessageSquare } from 'lucide-react'
 import Link from 'next/link'
@@ -28,6 +28,13 @@ export default function CommentSection({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const MAX = 2000
+
+  useEffect(() => {
+    const hash = window.location.hash
+    if (!hash.startsWith('#comment-')) return
+    const el = document.getElementById(hash.slice(1))
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }, [])
 
   function autoResize() {
     const el = textareaRef.current

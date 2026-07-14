@@ -127,7 +127,7 @@ export default function CommentItem({
   const isTopLevel = depth === 0
 
   return (
-    <div className={isTopLevel ? 'rounded border border-nyc-border bg-nyc-card-hover' : ''}>
+    <div id={`comment-${comment.id}`} className={isTopLevel ? 'rounded border border-nyc-border bg-nyc-card-hover' : ''}>
       <div className="group flex gap-3 p-3">
         {/* Thread collapse line for top-level */}
         {isTopLevel ? (
