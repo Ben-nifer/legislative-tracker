@@ -44,14 +44,14 @@ export default function MobileNav({
 
       {open && (
         <div
-          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm sm:hidden"
+          className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm sm:hidden"
           onClick={close}
         />
       )}
 
       <div
         className={[
-          'fixed inset-y-0 left-0 z-50 w-72 bg-nyc-card border-r border-nyc-border flex flex-col transition-transform duration-300 ease-in-out sm:hidden',
+          'fixed inset-y-0 left-0 z-[70] w-72 bg-nyc-card border-r border-nyc-border flex flex-col transition-transform duration-300 ease-in-out sm:hidden',
           open ? 'translate-x-0' : '-translate-x-full',
         ].join(' ')}
       >
