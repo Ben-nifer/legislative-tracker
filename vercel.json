@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/sync-legislation",
-      "schedule": "0 8,20 * * *"
+      "schedule": "0 */2 * * *"
     },
     {
       "path": "/api/cron/send-digests",
@@ -18,7 +18,7 @@
     },
     {
       "path": "/api/cron/summarize-legislation",
-      "schedule": "0 9,21 * * *"
+      "schedule": "0 1/2 * * *"
     }
   ]
 }
