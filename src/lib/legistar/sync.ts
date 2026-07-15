@@ -313,20 +313,14 @@ export async function syncSponsorships(
     return { synced: 0, offset, total: total ?? 0, done: true, apiFailed: 0, unmatched: 0, sponsorsFound: 0, skipped: 0 }
   }
 
-  // Skip bills that already have sponsorships
-  const batchIds = batch.map((b) => b.id)
-  const { data: existingRows } = await supabase
-    .from('sponsorships')
-    .select('legislation_id')
-    .in('legislation_id', batchIds)
-  const alreadySynced = new Set((existingRows ?? []).map((e) => e.legislation_id))
-  const toFetch = batch.filter((b) => !alreadySynced.has(b.id))
-  const skipped = batch.length - toFetch.length
+  const toFetch = batch
+  const skipped = 0
 
-  if (toFetch.length === 0) {
-    const nextOffset = offset + concurrency
-    return { synced: 0, offset: nextOffset, total: total ?? 0, done: nextOffset >= (total ?? 0), apiFailed: 0, unmatched: 0, sponsorsFound: 0, skipped }
-  }
+  // Delete existing sponsorships so each run is idempotent and self-correcting
+  await supabase
+    .from('sponsorships')
+    .delete()
+    .in('legislation_id', toFetch.map((b) => b.id))
 
   // Fetch sponsors for each bill concurrently
   const results = await Promise.allSettled(
@@ -335,11 +329,14 @@ export async function syncSponsorships(
       const matterId = idMatch?.[1]
       if (!matterId) return []
       const sponsors = await legistar.getMatterSponsors(Number(matterId))
+      const minSeq = sponsors.length > 0
+        ? Math.min(...sponsors.map((s) => s.MatterSponsorSequence))
+        : 0
       return sponsors.map((s) => ({
         legislation_id: item.id,
         legislator_id: findLegislator(s.MatterSponsorName),
         sponsorName: s.MatterSponsorName,
-        is_primary: s.MatterSponsorSequence === 1,
+        is_primary: s.MatterSponsorSequence === minSeq,
       }))
     })
   )

@@ -53,7 +53,7 @@ export const legistar = {
     legistarFetchAll<LegistarMatter>('/matters', params),
 
   getMatterSponsors: (matterId: number) =>
-    legistarFetch<LegistarSponsor[]>(`/matters/${matterId}/sponsors`),
+    legistarFetchAll<LegistarSponsor>(`/matters/${matterId}/sponsors`),
 
   getMatterHistories: (matterId: number) =>
     legistarFetch<LegistarHistory[]>(`/matters/${matterId}/histories`),
