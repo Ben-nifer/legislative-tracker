@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { RefreshCw, Sparkles, BarChart2, Tag, Users, FileText, MapPin } from 'lucide-react'
-import { generateSummariesBatch, generateShortSummaries, seedTopics, runSyncSponsorships, runSyncCouncilMembers, runSyncCommitteeMemberships, runScrapeDistrictData, runSyncCommunityBoards, runSyncLegislation, runRefreshStats } from '@/app/actions/admin'
+import { generateSummariesBatch, generateShortSummaries, seedTopics, runSyncSponsorships, runSyncCouncilMembers, runSyncCommitteeMemberships, runScrapeDistrictData, runSyncCommunityBoards, runSyncLegislation, runRefreshStats, debugSponsorSync } from '@/app/actions/admin'
 
 function CouncilSyncCard() {
   const [state, setState] = useState<JobState>('idle')
@@ -93,6 +93,72 @@ function CouncilSyncCard() {
           {log.map((line, i) => (
             <div key={i}>{line}</div>
           ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SponsorDebugCard() {
+  const [fileNumber, setFileNumber] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState<{ legistarNames: string[]; matchedNames: string[]; unmatchedNames: string[]; dbLegislators: string[]; error?: string } | null>(null)
+
+  async function run() {
+    if (!fileNumber.trim()) return
+    setLoading(true)
+    setResult(null)
+    const res = await debugSponsorSync(fileNumber.trim())
+    setResult(res)
+    setLoading(false)
+  }
+
+  return (
+    <div className="bg-slate-800/80 border border-slate-700 rounded-xl p-6 space-y-4">
+      <div className="flex items-center gap-3">
+        <div className="p-2 rounded-lg bg-rose-500/10">
+          <Users className="w-5 h-5 text-rose-400" />
+        </div>
+        <div>
+          <h2 className="font-semibold text-white">Debug Sponsor Matching</h2>
+          <p className="text-sm text-slate-400 mt-0.5">
+            Shows what names Legistar returns for a specific bill and whether they match legislators in our DB.
+          </p>
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <input
+          value={fileNumber}
+          onChange={(e) => setFileNumber(e.target.value)}
+          placeholder="e.g. Int 0943-2026"
+          className="flex-1 rounded bg-slate-900 border border-slate-700 text-sm text-white px-3 py-2 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+        />
+        <button
+          onClick={run}
+          disabled={loading || !fileNumber.trim()}
+          className="text-sm bg-rose-700 hover:bg-rose-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors"
+        >
+          {loading ? 'Checking…' : 'Debug'}
+        </button>
+      </div>
+      {result && (
+        <div className="text-xs rounded-lg p-3 font-mono bg-slate-900/60 text-slate-300 space-y-2 max-h-80 overflow-y-auto">
+          {result.error && <div className="text-red-400">✗ {result.error}</div>}
+          {result.legistarNames.length > 0 && (
+            <>
+              <div className="text-slate-400">Legistar returned {result.legistarNames.length} sponsor(s):</div>
+              {result.legistarNames.map((n, i) => (
+                <div key={i} className={result.unmatchedNames.some(u => n.startsWith(u)) ? 'text-red-400' : 'text-emerald-400'}>
+                  {result.unmatchedNames.some(u => n.startsWith(u)) ? '✗' : '✓'} {n}
+                </div>
+              ))}
+              {result.unmatchedNames.length > 0 && (
+                <div className="mt-2 text-amber-400">
+                  Unmatched names (not found in legislators table): {result.unmatchedNames.join(', ')}
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
     </div>
@@ -563,6 +629,9 @@ export default function SyncPage() {
 
         {/* Sync sponsorships */}
         <SponsorshipsCard />
+
+        {/* Debug sponsor name matching */}
+        <SponsorDebugCard />
 
         {/* Sync community boards from NYC Open Data */}
         <JobCard

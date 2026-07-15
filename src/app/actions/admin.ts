@@ -4,6 +4,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { createServerSupabaseClient, createServiceClient } from '@/lib/supabase/server'
 import { summarizeLegislation } from '@/lib/ai/summarize'
 import { syncSponsorships, syncCouncilMembers, syncCommitteeMemberships, fullSync } from '@/lib/legistar/sync'
+import { legistar } from '@/lib/legistar/client'
 import { scrapeAndSyncDistrictData } from '@/lib/council/scrape-districts'
 import { syncCommunityBoardsFromOpenData } from '@/lib/council/sync-community-boards'
 
@@ -377,6 +378,56 @@ export async function runSyncLegislation(): Promise<{
  * Refreshes legislation stats (trending scores, engagement counts).
  * Replaces the browser-side CronJobCard fetch so no NEXT_PUBLIC secret is needed.
  */
+export async function debugSponsorSync(
+  fileNumber: string
+): Promise<{ legistarNames: string[]; matchedNames: string[]; unmatchedNames: string[]; dbLegislators: string[]; error?: string }> {
+  try {
+    await assertAdmin()
+  } catch (e) {
+    return { legistarNames: [], matchedNames: [], unmatchedNames: [], dbLegislators: [], error: String(e) }
+  }
+
+  const supabase = createServiceClient()
+
+  const { data: bill } = await supabase
+    .from('legislation')
+    .select('id, legistar_url, file_number')
+    .ilike('file_number', fileNumber.trim())
+    .maybeSingle()
+
+  if (!bill) return { legistarNames: [], matchedNames: [], unmatchedNames: [], dbLegislators: [], error: `Bill "${fileNumber}" not found in DB` }
+  if (!bill.legistar_url) return { legistarNames: [], matchedNames: [], unmatchedNames: [], dbLegislators: [], error: 'Bill has no legistar_url' }
+
+  const idMatch = bill.legistar_url.match(/[?&]id=(\d+)/i)
+  const matterId = idMatch?.[1]
+  if (!matterId) return { legistarNames: [], matchedNames: [], unmatchedNames: [], dbLegislators: [], error: `Could not parse matterId from URL: ${bill.legistar_url}` }
+
+  const sponsors = await legistar.getMatterSponsors(Number(matterId))
+  const legistarNames = sponsors.map((s) => `${s.MatterSponsorName} (seq=${s.MatterSponsorSequence})`)
+
+  const { data: legislators } = await supabase.from('legislators').select('full_name, slug')
+  const nameSet = new Set((legislators ?? []).map((l) => l.full_name.toLowerCase().trim()))
+  const slugSet = new Set((legislators ?? []).map((l) => l.slug))
+
+  const matchedNames: string[] = []
+  const unmatchedNames: string[] = []
+
+  for (const s of sponsors) {
+    const nameMatch = nameSet.has(s.MatterSponsorName.toLowerCase().trim())
+    const slugFromName = s.MatterSponsorName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    const slugMatch = slugSet.has(slugFromName)
+    if (nameMatch || slugMatch) {
+      matchedNames.push(s.MatterSponsorName)
+    } else {
+      unmatchedNames.push(s.MatterSponsorName)
+    }
+  }
+
+  const dbLegislators = (legislators ?? []).map((l) => l.full_name)
+
+  return { legistarNames, matchedNames, unmatchedNames, dbLegislators }
+}
+
 export async function runRefreshStats(): Promise<{
   refreshed_at?: string
   error?: string
