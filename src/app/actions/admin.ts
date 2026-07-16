@@ -380,27 +380,28 @@ export async function runSyncLegislation(): Promise<{
  */
 export async function debugSponsorSync(
   fileNumber: string
-): Promise<{ legistarNames: string[]; matchedNames: string[]; unmatchedNames: string[]; dbLegislators: string[]; error?: string }> {
+): Promise<{ legistarNames: string[]; matchedNames: string[]; unmatchedNames: string[]; dbLegislators: string[]; dbSponsorRows: string[]; introDate: string | null; error?: string }> {
   try {
     await assertAdmin()
   } catch (e) {
-    return { legistarNames: [], matchedNames: [], unmatchedNames: [], dbLegislators: [], error: String(e) }
+    return { legistarNames: [], matchedNames: [], unmatchedNames: [], dbLegislators: [], dbSponsorRows: [], introDate: null, error: String(e) }
   }
 
   const supabase = createServiceClient()
 
   const { data: bill } = await supabase
     .from('legislation')
-    .select('id, legistar_url, file_number')
+    .select('id, legistar_url, file_number, intro_date')
     .ilike('file_number', fileNumber.trim())
     .maybeSingle()
 
-  if (!bill) return { legistarNames: [], matchedNames: [], unmatchedNames: [], dbLegislators: [], error: `Bill "${fileNumber}" not found in DB` }
-  if (!bill.legistar_url) return { legistarNames: [], matchedNames: [], unmatchedNames: [], dbLegislators: [], error: 'Bill has no legistar_url' }
+  if (!bill) return { legistarNames: [], matchedNames: [], unmatchedNames: [], dbLegislators: [], dbSponsorRows: [], introDate: null, error: `Bill "${fileNumber}" not found in DB` }
+  if (!bill.legistar_url) return { legistarNames: [], matchedNames: [], unmatchedNames: [], dbLegislators: [], dbSponsorRows: [], introDate: null, error: 'Bill has no legistar_url' }
+  if (!bill.intro_date) return { legistarNames: [], matchedNames: [], unmatchedNames: [], dbLegislators: [], dbSponsorRows: [], introDate: null, error: `Bill has no intro_date — it is excluded from sponsorship sync batches. Run "Sync Legislation" first to populate intro_date.` }
 
   const idMatch = bill.legistar_url.match(/[?&]id=(\d+)/i)
   const matterId = idMatch?.[1]
-  if (!matterId) return { legistarNames: [], matchedNames: [], unmatchedNames: [], dbLegislators: [], error: `Could not parse matterId from URL: ${bill.legistar_url}` }
+  if (!matterId) return { legistarNames: [], matchedNames: [], unmatchedNames: [], dbLegislators: [], dbSponsorRows: [], introDate: bill.intro_date, error: `Could not parse matterId from URL: ${bill.legistar_url}` }
 
   const sponsors = await legistar.getMatterSponsors(Number(matterId))
   const legistarNames = sponsors.map((s) => `${s.MatterSponsorName} (seq=${s.MatterSponsorSequence})`)
@@ -423,9 +424,19 @@ export async function debugSponsorSync(
     }
   }
 
+  const { data: existingRows } = await supabase
+    .from('sponsorships')
+    .select('is_primary, legislator:legislators(full_name)')
+    .eq('legislation_id', bill.id)
+
+  const dbSponsorRows = (existingRows ?? []).map((r) => {
+    const name = Array.isArray(r.legislator) ? r.legislator[0]?.full_name : (r.legislator as { full_name: string } | null)?.full_name
+    return `${name ?? 'unknown'} (primary=${r.is_primary})`
+  })
+
   const dbLegislators = (legislators ?? []).map((l) => l.full_name)
 
-  return { legistarNames, matchedNames, unmatchedNames, dbLegislators }
+  return { legistarNames, matchedNames, unmatchedNames, dbLegislators, dbSponsorRows, introDate: bill.intro_date }
 }
 
 export async function runRefreshStats(): Promise<{

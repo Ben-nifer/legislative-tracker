@@ -102,7 +102,7 @@ function CouncilSyncCard() {
 function SponsorDebugCard() {
   const [fileNumber, setFileNumber] = useState('')
   const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<{ legistarNames: string[]; matchedNames: string[]; unmatchedNames: string[]; dbLegislators: string[]; error?: string } | null>(null)
+  const [result, setResult] = useState<{ legistarNames: string[]; matchedNames: string[]; unmatchedNames: string[]; dbLegislators: string[]; dbSponsorRows: string[]; introDate: string | null; error?: string } | null>(null)
 
   async function run() {
     if (!fileNumber.trim()) return
@@ -144,9 +144,19 @@ function SponsorDebugCard() {
       {result && (
         <div className="text-xs rounded-lg p-3 font-mono bg-slate-900/60 text-slate-300 space-y-2 max-h-80 overflow-y-auto">
           {result.error && <div className="text-red-400">✗ {result.error}</div>}
+          {result.introDate !== undefined && !result.error && (
+            <div className={result.introDate ? 'text-slate-400' : 'text-amber-400'}>
+              intro_date in DB: {result.introDate ?? 'NULL — bill is excluded from sync batches!'}
+            </div>
+          )}
+          {result.dbSponsorRows !== undefined && (
+            <div className="text-slate-400">
+              Current DB sponsorships: {result.dbSponsorRows.length === 0 ? 'none' : result.dbSponsorRows.join(', ')}
+            </div>
+          )}
           {result.legistarNames.length > 0 && (
             <>
-              <div className="text-slate-400">Legistar returned {result.legistarNames.length} sponsor(s):</div>
+              <div className="text-slate-400 mt-1">Legistar returned {result.legistarNames.length} sponsor(s):</div>
               {result.legistarNames.map((n, i) => (
                 <div key={i} className={result.unmatchedNames.some(u => n.startsWith(u)) ? 'text-red-400' : 'text-emerald-400'}>
                   {result.unmatchedNames.some(u => n.startsWith(u)) ? '✗' : '✓'} {n}
