@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { RefreshCw, Sparkles, BarChart2, Tag, Users, FileText, MapPin } from 'lucide-react'
-import { generateSummariesBatch, generateShortSummaries, seedTopics, runSyncSponsorships, runSyncCouncilMembers, runSyncCommitteeMemberships, runScrapeDistrictData, runSyncCommunityBoards, runSyncLegislation, runRefreshStats, debugSponsorSync } from '@/app/actions/admin'
+import { generateSummariesBatch, generateShortSummaries, seedTopics, runSyncSponsorships, runSyncCouncilMembers, runSyncCommitteeMemberships, runScrapeDistrictData, runSyncCommunityBoards, runSyncLegislation, runRefreshStats, debugSponsorSync, forceSyncSingleBill } from '@/app/actions/admin'
 
 function CouncilSyncCard() {
   const [state, setState] = useState<JobState>('idle')
@@ -102,15 +102,27 @@ function CouncilSyncCard() {
 function SponsorDebugCard() {
   const [fileNumber, setFileNumber] = useState('')
   const [loading, setLoading] = useState(false)
+  const [forceLoading, setForceLoading] = useState(false)
   const [result, setResult] = useState<{ legistarNames: string[]; matchedNames: string[]; unmatchedNames: string[]; dbLegislators: string[]; dbSponsorRows: string[]; introDate: string | null; error?: string } | null>(null)
+  const [forceResult, setForceResult] = useState<{ inserted: number; unmatched: string[]; log: string[]; error?: string } | null>(null)
 
-  async function run() {
+  async function runDebug() {
     if (!fileNumber.trim()) return
     setLoading(true)
     setResult(null)
+    setForceResult(null)
     const res = await debugSponsorSync(fileNumber.trim())
     setResult(res)
     setLoading(false)
+  }
+
+  async function runForce() {
+    if (!fileNumber.trim()) return
+    setForceLoading(true)
+    setForceResult(null)
+    const res = await forceSyncSingleBill(fileNumber.trim())
+    setForceResult(res)
+    setForceLoading(false)
   }
 
   return (
@@ -120,9 +132,9 @@ function SponsorDebugCard() {
           <Users className="w-5 h-5 text-rose-400" />
         </div>
         <div>
-          <h2 className="font-semibold text-white">Debug Sponsor Matching</h2>
+          <h2 className="font-semibold text-white">Debug / Force-Sync Single Bill Sponsors</h2>
           <p className="text-sm text-slate-400 mt-0.5">
-            Shows what names Legistar returns for a specific bill and whether they match legislators in our DB.
+            Debug shows what Legistar returns and whether names match our DB. Force Sync writes the sponsors directly for one bill.
           </p>
         </div>
       </div>
@@ -134,11 +146,18 @@ function SponsorDebugCard() {
           className="flex-1 rounded bg-slate-900 border border-slate-700 text-sm text-white px-3 py-2 placeholder-slate-500 focus:outline-none focus:border-indigo-500"
         />
         <button
-          onClick={run}
-          disabled={loading || !fileNumber.trim()}
-          className="text-sm bg-rose-700 hover:bg-rose-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors"
+          onClick={runDebug}
+          disabled={loading || forceLoading || !fileNumber.trim()}
+          className="text-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors"
         >
           {loading ? 'Checking…' : 'Debug'}
+        </button>
+        <button
+          onClick={runForce}
+          disabled={loading || forceLoading || !fileNumber.trim()}
+          className="text-sm bg-rose-700 hover:bg-rose-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors"
+        >
+          {forceLoading ? 'Syncing…' : 'Force Sync'}
         </button>
       </div>
       {result && (
@@ -164,11 +183,18 @@ function SponsorDebugCard() {
               ))}
               {result.unmatchedNames.length > 0 && (
                 <div className="mt-2 text-amber-400">
-                  Unmatched names (not found in legislators table): {result.unmatchedNames.join(', ')}
+                  Unmatched: {result.unmatchedNames.join(', ')}
                 </div>
               )}
             </>
           )}
+        </div>
+      )}
+      {forceResult && (
+        <div className={`text-xs rounded-lg p-3 font-mono space-y-1 max-h-80 overflow-y-auto ${forceResult.error ? 'bg-red-500/10 text-red-300' : 'bg-emerald-500/10 text-emerald-300'}`}>
+          {forceResult.error && <div className="text-red-400">✗ {forceResult.error}</div>}
+          {forceResult.log.map((line, i) => <div key={i}>{line}</div>)}
+          {!forceResult.error && <div className="font-bold mt-1">Inserted {forceResult.inserted} rows. Unmatched: {forceResult.unmatched.length === 0 ? 'none' : forceResult.unmatched.join(', ')}</div>}
         </div>
       )}
     </div>

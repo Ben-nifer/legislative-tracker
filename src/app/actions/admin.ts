@@ -439,6 +439,71 @@ export async function debugSponsorSync(
   return { legistarNames, matchedNames, unmatchedNames, dbLegislators, dbSponsorRows, introDate: bill.intro_date }
 }
 
+export async function forceSyncSingleBill(
+  fileNumber: string
+): Promise<{ inserted: number; unmatched: string[]; log: string[]; error?: string }> {
+  try { await assertAdmin() } catch (e) { return { inserted: 0, unmatched: [], log: [], error: String(e) } }
+
+  const supabase = createServiceClient()
+  const log: string[] = []
+
+  const { data: bill } = await supabase
+    .from('legislation')
+    .select('id, legistar_url, file_number')
+    .ilike('file_number', fileNumber.trim())
+    .maybeSingle()
+
+  if (!bill) return { inserted: 0, unmatched: [], log, error: `Bill "${fileNumber}" not found` }
+  if (!bill.legistar_url) return { inserted: 0, unmatched: [], log, error: 'Bill has no legistar_url' }
+
+  const idMatch = bill.legistar_url.match(/[?&]id=(\d+)/i)
+  const matterId = idMatch?.[1]
+  if (!matterId) return { inserted: 0, unmatched: [], log, error: `Could not parse matterId from: ${bill.legistar_url}` }
+
+  log.push(`Fetching sponsors for matterId=${matterId}…`)
+  const sponsors = await legistar.getMatterSponsors(Number(matterId))
+  log.push(`Legistar returned ${sponsors.length} sponsor(s)`)
+
+  const { data: legislators } = await supabase.from('legislators').select('id, full_name, slug')
+  const legislatorBySlug = new Map((legislators ?? []).map((l) => [l.slug, l.id]))
+  const legislatorByName = new Map((legislators ?? []).map((l) => [l.full_name.toLowerCase().trim(), l.id]))
+
+  function toSlug(text: string) {
+    return text.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '')
+  }
+  function findLeg(name: string) {
+    return legislatorBySlug.get(toSlug(name)) ?? legislatorByName.get(name.toLowerCase().trim())
+  }
+
+  const minSeq = sponsors.length > 0 ? Math.min(...sponsors.map(s => s.MatterSponsorSequence)) : 0
+  const rows: { legislation_id: string; legislator_id: string; is_primary: boolean }[] = []
+  const unmatched: string[] = []
+
+  for (const s of sponsors) {
+    const legId = findLeg(s.MatterSponsorName)
+    if (legId) {
+      rows.push({ legislation_id: bill.id, legislator_id: legId, is_primary: s.MatterSponsorSequence === minSeq })
+      log.push(`✓ matched: ${s.MatterSponsorName}`)
+    } else {
+      unmatched.push(s.MatterSponsorName)
+      log.push(`✗ no match: ${s.MatterSponsorName}`)
+    }
+  }
+
+  log.push(`Deleting existing sponsorships for ${bill.file_number}…`)
+  await supabase.from('sponsorships').delete().eq('legislation_id', bill.id)
+
+  if (rows.length > 0) {
+    const { error } = await supabase.from('sponsorships').upsert(rows, { onConflict: 'legislation_id,legislator_id' })
+    if (error) return { inserted: 0, unmatched, log, error: `Upsert failed: ${error.message}` }
+    log.push(`Inserted ${rows.length} sponsorship row(s)`)
+  } else {
+    log.push('No rows to insert')
+  }
+
+  return { inserted: rows.length, unmatched, log }
+}
+
 export async function runRefreshStats(): Promise<{
   refreshed_at?: string
   error?: string
