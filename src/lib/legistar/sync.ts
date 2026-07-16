@@ -276,7 +276,7 @@ export async function syncLegislation(since = '2022-01-01'): Promise<number> {
 // Returns offset to pass into the next call. Done when done=true.
 export async function syncSponsorships(
   offset = 0,
-  concurrency = 30
+  concurrency = 5
 ): Promise<{ synced: number; offset: number; total: number; done: boolean; apiFailed: number; unmatched: number; sponsorsFound: number; skipped: number }> {
   const supabase = createServiceClient()
 
