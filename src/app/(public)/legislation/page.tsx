@@ -106,9 +106,25 @@ async function getLegislation(
   }
 
   if (filters.q) {
-    query = query.or(
-      `title.ilike.%${filters.q}%,ai_summary.ilike.%${filters.q}%,official_summary.ilike.%${filters.q}%,file_number.ilike.%${filters.q}%`
-    )
+    const { data: matchedLegislators } = await supabase
+      .from('legislators')
+      .select('id')
+      .ilike('full_name', `%${filters.q}%`)
+
+    let sponsoredIds: string[] = []
+    if (matchedLegislators && matchedLegislators.length > 0) {
+      const { data: sponsorRows } = await supabase
+        .from('sponsorships')
+        .select('legislation_id')
+        .in('legislator_id', matchedLegislators.map((l) => l.id))
+      sponsoredIds = (sponsorRows ?? []).map((s) => s.legislation_id)
+    }
+
+    const textFilter = `title.ilike.%${filters.q}%,ai_summary.ilike.%${filters.q}%,official_summary.ilike.%${filters.q}%,file_number.ilike.%${filters.q}%`
+
+    query = sponsoredIds.length > 0
+      ? query.or(`${textFilter},id.in.(${sponsoredIds.join(',')})`)
+      : query.or(textFilter)
   }
 
   if (filters.status) {
