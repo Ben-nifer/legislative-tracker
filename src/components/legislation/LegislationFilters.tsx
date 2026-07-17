@@ -64,7 +64,7 @@ export default function LegislationFilters({
         />
         <input
           type="search"
-          placeholder="Search legislation or bill number…"
+          placeholder="Search by keyword, bill number, topic, or council member…"
           defaultValue={q}
           onChange={(e) => updateParam('q', e.target.value)}
           className="w-full rounded border border-nyc-border bg-nyc-card py-2 pl-9 pr-4 text-sm text-nyc-blue placeholder-nyc-muted outline-none transition-colors focus:border-nyc-orange focus:ring-1 focus:ring-nyc-orange"
