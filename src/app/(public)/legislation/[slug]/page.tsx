@@ -108,14 +108,6 @@ async function getLegislation(slug: string): Promise<LegislationDetail | null> {
         is_primary,
         legislator:legislators(full_name, slug, district)
       ),
-      history:legislation_history(
-        id,
-        action_date,
-        action_text,
-        action_body_name,
-        passed_flag,
-        sequence
-      ),
       events(
         id,
         event_date,
@@ -129,6 +121,12 @@ async function getLegislation(slug: string): Promise<LegislationDetail | null> {
     .single()
 
   if (error || !data) return null
+
+  const { data: historyRows } = await supabase
+    .from('legislation_history')
+    .select('id, action_date, action_text, action_body_name, passed_flag, sequence')
+    .eq('legislation_id', data.id)
+    .order('sequence', { ascending: false, nullsFirst: false })
 
   const now = new Date()
   const statsRow = Array.isArray(data.stats) ? data.stats[0] : data.stats
@@ -160,7 +158,7 @@ async function getLegislation(slug: string): Promise<LegislationDetail | null> {
     full_text_url: data.full_text_url,
     committee_name: null,
     sponsors,
-    history: (data.history ?? []).sort((a, b) => {
+    history: (historyRows ?? []).sort((a, b) => {
       if (a.sequence != null && b.sequence != null) return b.sequence - a.sequence
       return new Date(b.action_date ?? 0).getTime() - new Date(a.action_date ?? 0).getTime()
     }),
