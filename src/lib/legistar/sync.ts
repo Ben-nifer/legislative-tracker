@@ -434,7 +434,15 @@ export async function syncHistories(
 
   let inserted = 0
   if (rows.length > 0) {
-    const { error } = await supabase.from('legislation_history').insert(rows)
+    const rpcRows = rows.map(({ legislation_id, action_date, action_text, action_body_name, sequence, passed_flag }) => ({
+      legislation_id,
+      action_date,
+      action_text,
+      action_body_name,
+      sequence,
+      passed_flag,
+    }))
+    const { error } = await supabase.rpc('insert_legislation_history', { rows: rpcRows })
     if (error) throw new Error(`History insert failed: ${error.message}`)
     inserted = rows.length
   }
