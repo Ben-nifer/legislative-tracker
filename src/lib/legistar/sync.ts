@@ -432,12 +432,15 @@ export async function syncHistories(
     rows.push(...result.value)
   }
 
+  let inserted = 0
   if (rows.length > 0) {
-    await supabase.from('legislation_history').insert(rows)
+    const { error } = await supabase.from('legislation_history').insert(rows)
+    if (error) throw new Error(`History insert failed: ${error.message}`)
+    inserted = rows.length
   }
 
   const nextOffset = offset + concurrency
-  return { synced: rows.length, offset: nextOffset, total: total ?? 0, done: nextOffset >= (total ?? 0), apiFailed }
+  return { synced: inserted, offset: nextOffset, total: total ?? 0, done: nextOffset >= (total ?? 0), apiFailed }
 }
 
 // Step 5: Create empty stats rows for any legislation that doesn't have one yet
