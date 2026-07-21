@@ -374,7 +374,73 @@ export async function syncSponsorships(
   return { synced: rows.length, offset: nextOffset, total: total ?? 0, done, apiFailed, unmatched, sponsorsFound, skipped }
 }
 
-// Step 4: Create empty stats rows for any legislation that doesn't have one yet
+// Step 4: Sync action history for each bill from Legistar
+export async function syncHistories(
+  offset = 0,
+  concurrency = 5
+): Promise<{ synced: number; offset: number; total: number; done: boolean; apiFailed: number }> {
+  const supabase = createServiceClient()
+
+  const { data: batch, count: total } = await supabase
+    .from('legislation')
+    .select('id, legistar_url', { count: 'exact' })
+    .not('legistar_url', 'is', null)
+    .order('intro_date', { ascending: false, nullsFirst: false })
+    .range(offset, offset + concurrency - 1)
+
+  if (!batch || batch.length === 0) {
+    return { synced: 0, offset, total: total ?? 0, done: true, apiFailed: 0 }
+  }
+
+  const results = await Promise.allSettled(
+    batch.map(async (item) => {
+      const idMatch = item.legistar_url!.match(/[?&]id=(\d+)/i)
+      const matterId = idMatch?.[1]
+      if (!matterId) return []
+      const histories = await legistar.getMatterHistories(Number(matterId))
+      return histories.map((h) => ({
+        legislation_id: item.id,
+        legistar_id: h.MatterHistoryId,
+        action_date: parseLegistarDate(h.MatterHistoryActionDate),
+        action_text: h.MatterHistoryActionName || null,
+        action_body_name: h.MatterHistoryActionBodyName || null,
+        sequence: h.MatterHistorySequence ?? null,
+        passed_flag: h.MatterHistoryPassedFlag === 1 ? true : h.MatterHistoryPassedFlag === 0 ? false : null,
+      }))
+    })
+  )
+
+  // Delete existing rows for this batch (idempotent)
+  await supabase
+    .from('legislation_history')
+    .delete()
+    .in('legislation_id', batch.map((b) => b.id))
+
+  const rows: {
+    legislation_id: string
+    legistar_id: number
+    action_date: string | null
+    action_text: string | null
+    action_body_name: string | null
+    sequence: number | null
+    passed_flag: boolean | null
+  }[] = []
+  let apiFailed = 0
+
+  for (const result of results) {
+    if (result.status !== 'fulfilled') { apiFailed++; continue }
+    rows.push(...result.value)
+  }
+
+  if (rows.length > 0) {
+    await supabase.from('legislation_history').insert(rows)
+  }
+
+  const nextOffset = offset + concurrency
+  return { synced: rows.length, offset: nextOffset, total: total ?? 0, done: nextOffset >= (total ?? 0), apiFailed }
+}
+
+// Step 5: Create empty stats rows for any legislation that doesn't have one yet
 export async function initializeMissingStats(): Promise<number> {
   const supabase = createServiceClient()
 

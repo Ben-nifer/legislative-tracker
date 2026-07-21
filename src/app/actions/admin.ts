@@ -3,7 +3,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { createServerSupabaseClient, createServiceClient } from '@/lib/supabase/server'
 import { summarizeLegislation } from '@/lib/ai/summarize'
-import { syncSponsorships, syncCouncilMembers, syncCommitteeMemberships, fullSync } from '@/lib/legistar/sync'
+import { syncSponsorships, syncCouncilMembers, syncCommitteeMemberships, syncHistories, fullSync } from '@/lib/legistar/sync'
 import { legistar } from '@/lib/legistar/client'
 import { scrapeAndSyncDistrictData } from '@/lib/council/scrape-districts'
 import { syncCommunityBoardsFromOpenData } from '@/lib/council/sync-community-boards'
@@ -378,6 +378,21 @@ export async function runSyncLegislation(): Promise<{
  * Refreshes legislation stats (trending scores, engagement counts).
  * Replaces the browser-side CronJobCard fetch so no NEXT_PUBLIC secret is needed.
  */
+export async function runSyncHistories(
+  offset = 0
+): Promise<{ synced: number; offset: number; total: number; done: boolean; apiFailed: number; error?: string }> {
+  try {
+    await assertAdmin()
+  } catch (e) {
+    return { synced: 0, offset, total: 0, done: true, apiFailed: 0, error: String(e) }
+  }
+  try {
+    return await syncHistories(offset)
+  } catch (e) {
+    return { synced: 0, offset, total: 0, done: true, apiFailed: 0, error: String(e) }
+  }
+}
+
 export async function debugSponsorSync(
   fileNumber: string
 ): Promise<{ legistarNames: string[]; matchedNames: string[]; unmatchedNames: string[]; dbLegislators: string[]; dbSponsorRows: string[]; introDate: string | null; error?: string }> {

@@ -34,6 +34,7 @@ type HistoryItem = {
   id: string
   action_date: string | null
   action_text: string | null
+  action_body_name: string | null
   passed_flag: boolean | null
 }
 
@@ -111,7 +112,9 @@ async function getLegislation(slug: string): Promise<LegislationDetail | null> {
         id,
         action_date,
         action_text,
-        passed_flag
+        action_body_name,
+        passed_flag,
+        sequence
       ),
       events(
         id,
@@ -157,7 +160,10 @@ async function getLegislation(slug: string): Promise<LegislationDetail | null> {
     full_text_url: data.full_text_url,
     committee_name: null,
     sponsors,
-    history: (data.history ?? []).slice(0, 10),
+    history: (data.history ?? []).sort((a, b) => {
+      if (a.sequence != null && b.sequence != null) return b.sequence - a.sequence
+      return new Date(b.action_date ?? 0).getTime() - new Date(a.action_date ?? 0).getTime()
+    }),
     upcoming_hearings: upcomingHearings,
     stats: {
       support_count: statsRow?.support_count ?? 0,
@@ -542,26 +548,36 @@ export default async function LegislationDetailPage({
                 <Clock size={14} /> History
               </h2>
               <ol className="relative border-l border-nyc-border pl-5 space-y-4">
-                {legislation.history.map((item, i) => (
-                  <li key={item.id} className="relative">
-                    <span
-                      className={`absolute -left-[21px] flex h-3 w-3 items-center justify-center rounded-full border-2 border-nyc-card ${
-                        i === 0 ? 'bg-nyc-orange' : 'bg-nyc-muted/40'
-                      }`}
-                    />
-                    <p className="text-sm text-nyc-blue">
-                      {item.action_text ?? 'Action recorded'}
-                    </p>
-                    {item.action_date && (
-                      <p className="mt-0.5 text-xs text-nyc-muted">
-                        {fmt(item.action_date)}
-                        <span className="ml-1.5">
-                          · {formatDistanceToNow(new Date(item.action_date), { addSuffix: true })}
-                        </span>
+                {legislation.history.map((item, i) => {
+                  const dotColor = item.passed_flag === true
+                    ? 'bg-emerald-500'
+                    : item.passed_flag === false
+                    ? 'bg-red-500'
+                    : i === 0
+                    ? 'bg-nyc-orange'
+                    : 'bg-nyc-muted/40'
+                  return (
+                    <li key={item.id} className="relative">
+                      <span className={`absolute -left-[21px] h-3 w-3 rounded-full border-2 border-nyc-card ${dotColor}`} />
+                      <p className="text-sm text-nyc-blue">
+                        {item.action_text ?? 'Action recorded'}
                       </p>
-                    )}
-                  </li>
-                ))}
+                      {item.action_body_name && (
+                        <p className="mt-0.5 text-xs text-nyc-muted">
+                          {item.action_body_name}
+                        </p>
+                      )}
+                      {item.action_date && (
+                        <p className="mt-0.5 text-xs text-nyc-muted/60">
+                          {fmt(item.action_date)}
+                          <span className="ml-1.5">
+                            · {formatDistanceToNow(new Date(item.action_date), { addSuffix: true })}
+                          </span>
+                        </p>
+                      )}
+                    </li>
+                  )
+                })}
               </ol>
             </section>
           )}

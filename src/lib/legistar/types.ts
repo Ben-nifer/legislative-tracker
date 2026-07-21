@@ -60,4 +60,6 @@ export interface LegistarHistory {
   MatterHistoryActionDate: string
   MatterHistoryActionName: string
   MatterHistoryPassedFlag: number | null  // 1 = passed, 0 = failed
+  MatterHistoryActionBodyName: string     // e.g. "Committee on Finance", "City Council"
+  MatterHistorySequence: number           // chronological ordering
 }

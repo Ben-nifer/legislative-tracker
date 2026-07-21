@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { RefreshCw, Sparkles, BarChart2, Tag, Users, FileText, MapPin } from 'lucide-react'
-import { generateSummariesBatch, generateShortSummaries, seedTopics, runSyncSponsorships, runSyncCouncilMembers, runSyncCommitteeMemberships, runScrapeDistrictData, runSyncCommunityBoards, runSyncLegislation, runRefreshStats, debugSponsorSync, forceSyncSingleBill } from '@/app/actions/admin'
+import { generateSummariesBatch, generateShortSummaries, seedTopics, runSyncSponsorships, runSyncHistories, runSyncCouncilMembers, runSyncCommitteeMemberships, runScrapeDistrictData, runSyncCommunityBoards, runSyncLegislation, runRefreshStats, debugSponsorSync, forceSyncSingleBill } from '@/app/actions/admin'
 
 function CouncilSyncCard() {
   const [state, setState] = useState<JobState>('idle')
@@ -93,6 +93,103 @@ function CouncilSyncCard() {
           {log.map((line, i) => (
             <div key={i}>{line}</div>
           ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function HistoriesCard() {
+  const [state, setState] = useState<JobState>('idle')
+  const [log, setLog] = useState<string[]>([])
+  const [autoRun, setAutoRun] = useState(false)
+  const autoRunRef = useRef(false)
+
+  async function runOnce(offset: number): Promise<{ nextOffset: number; done: boolean }> {
+    const res = await runSyncHistories(offset)
+    setLog((prev) => [
+      `offset ${offset}/${res.total} — synced ${res.synced} history rows${res.apiFailed > 0 ? `, apiFailed ${res.apiFailed}` : ''}${res.error ? ` — ${res.error}` : ''}`,
+      ...prev.slice(0, 19),
+    ])
+    return { nextOffset: res.offset, done: res.done }
+  }
+
+  async function runAll() {
+    setState('running')
+    setLog([])
+    autoRunRef.current = true
+    setAutoRun(true)
+    try {
+      let offset = 0
+      let done = false
+      while (autoRunRef.current && !done) {
+        const result = await runOnce(offset)
+        offset = result.nextOffset
+        done = result.done
+      }
+      setState('done')
+    } catch (e) {
+      setLog((prev) => [`✗ error: ${String(e)}`, ...prev])
+      setState('error')
+    }
+    setAutoRun(false)
+  }
+
+  function stop() {
+    autoRunRef.current = false
+  }
+
+  return (
+    <div className="bg-slate-800/80 border border-slate-700 rounded-xl p-6 space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-indigo-500/10">
+            <FileText className="w-5 h-5 text-indigo-400" />
+          </div>
+          <div>
+            <h2 className="font-semibold text-white">Sync Bill History</h2>
+            <p className="text-sm text-slate-400 mt-0.5">
+              Fetches the full action ledger for each bill from Legistar — who took each action, when, and the outcome.
+              "Run all" processes every bill in batches of 5.
+            </p>
+          </div>
+        </div>
+        <div className="flex gap-2 shrink-0">
+          {autoRun ? (
+            <button onClick={stop} className="text-sm bg-red-700 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors">
+              Stop
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={() => runOnce(0)}
+                disabled={state === 'running'}
+                className="text-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                Run once
+              </button>
+              <button
+                onClick={runAll}
+                disabled={state === 'running'}
+                className="text-sm bg-indigo-700 hover:bg-indigo-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+              >
+                Run all
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {autoRun && (
+        <div className="flex items-center gap-2 text-sm text-indigo-300">
+          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+          Running continuously — click Stop to pause
+        </div>
+      )}
+
+      {log.length > 0 && (
+        <div className="text-xs rounded-lg p-3 font-mono bg-slate-900/60 text-slate-300 space-y-1 max-h-48 overflow-y-auto">
+          {log.map((line, i) => <div key={i}>{line}</div>)}
         </div>
       )}
     </div>
@@ -665,6 +762,9 @@ export default function SyncPage() {
 
         {/* Sync sponsorships */}
         <SponsorshipsCard />
+
+        {/* Sync bill action history */}
+        <HistoriesCard />
 
         {/* Debug sponsor name matching */}
         <SponsorDebugCard />
