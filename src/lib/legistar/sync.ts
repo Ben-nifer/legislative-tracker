@@ -280,11 +280,14 @@ export async function syncSponsorships(
 ): Promise<{ synced: number; offset: number; total: number; done: boolean; apiFailed: number; unmatched: number; sponsorsFound: number; skipped: number }> {
   const supabase = createServiceClient()
 
-  // Build legislator lookups: slug → id AND normalized name → id
+  // Build legislator lookups: legistar_id → id (most reliable), slug → id, name → id
   const { data: legislators } = await supabase
     .from('legislators')
-    .select('id, slug, full_name')
+    .select('id, slug, full_name, legistar_id')
 
+  const legislatorByLegistarId = new Map(
+    (legislators ?? []).filter(l => l.legistar_id != null).map((l) => [l.legistar_id as number, l.id])
+  )
   const legislatorBySlug = new Map(
     (legislators ?? []).map((l) => [l.slug, l.id])
   )
@@ -292,11 +295,16 @@ export async function syncSponsorships(
     (legislators ?? []).map((l) => [l.full_name.toLowerCase().trim(), l.id])
   )
 
-  function findLegislator(sponsorName: string): string | undefined {
-    // Try slug match first
+  function findLegislator(sponsorName: string, legistarPersonId?: number): string | undefined {
+    // 1. Exact Legistar person ID match (most reliable — avoids name/middle-initial mismatches)
+    if (legistarPersonId != null) {
+      const byId = legislatorByLegistarId.get(legistarPersonId)
+      if (byId) return byId
+    }
+    // 2. Slug match
     const bySlug = legislatorBySlug.get(toSlug(sponsorName))
     if (bySlug) return bySlug
-    // Fall back to normalized name match
+    // 3. Normalized name match
     return legislatorByName.get(sponsorName.toLowerCase().trim())
   }
 
@@ -334,7 +342,7 @@ export async function syncSponsorships(
         : 0
       return sponsors.map((s) => ({
         legislation_id: item.id,
-        legislator_id: findLegislator(s.MatterSponsorName),
+        legislator_id: findLegislator(s.MatterSponsorName, s.MatterSponsorNameId),
         sponsorName: s.MatterSponsorName,
         is_primary: s.MatterSponsorSequence === minSeq,
       }))

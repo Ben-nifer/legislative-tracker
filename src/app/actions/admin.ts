@@ -479,14 +479,19 @@ export async function forceSyncSingleBill(
   const sponsors = await legistar.getMatterSponsors(Number(matterId))
   log.push(`Legistar returned ${sponsors.length} sponsor(s)`)
 
-  const { data: legislators } = await supabase.from('legislators').select('id, full_name, slug')
+  const { data: legislators } = await supabase.from('legislators').select('id, full_name, slug, legistar_id')
+  const legislatorByLegistarId = new Map((legislators ?? []).filter(l => l.legistar_id != null).map((l) => [l.legistar_id as number, l.id]))
   const legislatorBySlug = new Map((legislators ?? []).map((l) => [l.slug, l.id]))
   const legislatorByName = new Map((legislators ?? []).map((l) => [l.full_name.toLowerCase().trim(), l.id]))
 
   function toSlug(text: string) {
     return text.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/-+/g, '-').replace(/^-|-$/g, '')
   }
-  function findLeg(name: string) {
+  function findLeg(name: string, legistarPersonId?: number) {
+    if (legistarPersonId != null) {
+      const byId = legislatorByLegistarId.get(legistarPersonId)
+      if (byId) return byId
+    }
     return legislatorBySlug.get(toSlug(name)) ?? legislatorByName.get(name.toLowerCase().trim())
   }
 
@@ -495,13 +500,13 @@ export async function forceSyncSingleBill(
   const unmatched: string[] = []
 
   for (const s of sponsors) {
-    const legId = findLeg(s.MatterSponsorName)
+    const legId = findLeg(s.MatterSponsorName, s.MatterSponsorNameId)
     if (legId) {
       rows.push({ legislation_id: bill.id, legislator_id: legId, is_primary: s.MatterSponsorSequence === minSeq })
-      log.push(`✓ matched: ${s.MatterSponsorName}`)
+      log.push(`✓ matched: ${s.MatterSponsorName} (legistarId=${s.MatterSponsorNameId})`)
     } else {
       unmatched.push(s.MatterSponsorName)
-      log.push(`✗ no match: ${s.MatterSponsorName}`)
+      log.push(`✗ no match: ${s.MatterSponsorName} (legistarId=${s.MatterSponsorNameId})`)
     }
   }
 
