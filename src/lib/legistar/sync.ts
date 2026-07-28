@@ -324,13 +324,7 @@ export async function syncSponsorships(
   const toFetch = batch
   const skipped = 0
 
-  // Delete existing sponsorships so each run is idempotent and self-correcting
-  await supabase
-    .from('sponsorships')
-    .delete()
-    .in('legislation_id', toFetch.map((b) => b.id))
-
-  // Fetch sponsors for each bill concurrently
+  // Fetch sponsors for each bill concurrently BEFORE deleting anything
   const results = await Promise.allSettled(
     toFetch.map(async (item) => {
       const idMatch = item.legistar_url!.match(/[?&]id=(\d+)/i)
@@ -351,6 +345,7 @@ export async function syncSponsorships(
 
   // Collect valid rows and track misses
   const rows: { legislation_id: string; legislator_id: string; is_primary: boolean }[] = []
+  const billsWithMatches = new Set<string>()
   let apiFailed = 0
   let unmatched = 0
   let sponsorsFound = 0
@@ -364,22 +359,42 @@ export async function syncSponsorships(
       sponsorsFound++
       if (row.legislator_id) {
         rows.push({ legislation_id: row.legislation_id, legislator_id: row.legislator_id, is_primary: row.is_primary })
+        billsWithMatches.add(row.legislation_id)
       } else {
         unmatched++
+        console.warn(`[syncSponsorships] unmatched sponsor "${row.sponsorName}" for legislation ${row.legislation_id}`)
       }
     }
   }
 
-  if (rows.length > 0) {
+  // Only delete for bills where we have replacement rows — never wipe sponsors when nothing matched
+  if (billsWithMatches.size > 0) {
     await supabase
       .from('sponsorships')
-      .upsert(rows, { onConflict: 'legislation_id,legislator_id' })
+      .delete()
+      .in('legislation_id', [...billsWithMatches])
+  }
+
+  // Deduplicate — Legistar sometimes returns each sponsor twice
+  const seen = new Set<string>()
+  const uniqueRows = rows.filter((r) => {
+    const key = `${r.legislation_id}:${r.legislator_id}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+
+  if (uniqueRows.length > 0) {
+    const { error } = await supabase
+      .from('sponsorships')
+      .insert(uniqueRows)
+    if (error) throw new Error(`Sponsorship insert failed: ${error.message}`)
   }
 
   const nextOffset = offset + concurrency
   const done = nextOffset >= (total ?? 0)
 
-  return { synced: rows.length, offset: nextOffset, total: total ?? 0, done, apiFailed, unmatched, sponsorsFound, skipped }
+  return { synced: uniqueRows.length, offset: nextOffset, total: total ?? 0, done, apiFailed, unmatched, sponsorsFound, skipped }
 }
 
 // Step 4: Sync action history for each bill from Legistar

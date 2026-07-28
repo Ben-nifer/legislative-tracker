@@ -441,11 +441,11 @@ export async function debugSponsorSync(
 
   const { data: existingRows } = await supabase
     .from('sponsorships')
-    .select('is_primary, legislator:legislators(full_name)')
+    .select('is_primary, legislator_id, legislators(full_name)')
     .eq('legislation_id', bill.id)
 
   const dbSponsorRows = (existingRows ?? []).map((r) => {
-    const name = Array.isArray(r.legislator) ? r.legislator[0]?.full_name : (r.legislator as { full_name: string } | null)?.full_name
+    const name = Array.isArray(r.legislators) ? r.legislators[0]?.full_name : (r.legislators as { full_name: string } | null)?.full_name
     return `${name ?? 'unknown'} (primary=${r.is_primary})`
   })
 
@@ -510,18 +510,28 @@ export async function forceSyncSingleBill(
     }
   }
 
+  // Deduplicate — Legistar sometimes returns each sponsor twice
+  const seen = new Set<string>()
+  const uniqueRows = rows.filter((r) => {
+    const key = `${r.legislation_id}:${r.legislator_id}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+
   log.push(`Deleting existing sponsorships for ${bill.file_number}…`)
   await supabase.from('sponsorships').delete().eq('legislation_id', bill.id)
 
-  if (rows.length > 0) {
-    const { error } = await supabase.from('sponsorships').upsert(rows, { onConflict: 'legislation_id,legislator_id' })
-    if (error) return { inserted: 0, unmatched, log, error: `Upsert failed: ${error.message}` }
-    log.push(`Inserted ${rows.length} sponsorship row(s)`)
+  log.push(`Inserting ${uniqueRows.length} unique sponsorship row(s)…`)
+  if (uniqueRows.length > 0) {
+    const { error } = await supabase.from('sponsorships').insert(uniqueRows)
+    if (error) return { inserted: 0, unmatched, log, error: `Insert failed: ${error.message}` }
+    log.push(`Inserted ${uniqueRows.length} sponsorship row(s)`)
   } else {
     log.push('No rows to insert')
   }
 
-  return { inserted: rows.length, unmatched, log }
+  return { inserted: uniqueRows.length, unmatched, log }
 }
 
 export async function runSyncEvents(): Promise<{ synced: number; eventsFetched: number; apiFailed: number; error?: string }> {

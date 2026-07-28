@@ -102,10 +102,6 @@ async function getLegislation(slug: string): Promise<LegislationDetail | null> {
         comment_count,
         bookmark_count
       ),
-      sponsorships(
-        is_primary,
-        legislator:legislators(full_name, slug, district)
-      ),
       events(
         id,
         event_date,
@@ -126,12 +122,17 @@ async function getLegislation(slug: string): Promise<LegislationDetail | null> {
     .eq('legislation_id', data.id)
     .order('sequence', { ascending: false, nullsFirst: false })
 
+  const { data: sponsorshipRows } = await supabase
+    .from('sponsorships')
+    .select('is_primary, legislator_id, legislators(full_name, slug, district)')
+    .eq('legislation_id', data.id)
+
   const now = new Date()
   const statsRow = Array.isArray(data.stats) ? data.stats[0] : data.stats
 
-  const sponsors: Sponsor[] = (data.sponsorships ?? [])
+  const sponsors: Sponsor[] = (sponsorshipRows ?? [])
     .flatMap((s) => {
-      const legislator = Array.isArray(s.legislator) ? s.legislator[0] : s.legislator
+      const legislator = Array.isArray(s.legislators) ? s.legislators[0] : s.legislators
       if (!legislator) return []
       return [{ full_name: legislator.full_name, slug: legislator.slug, district: legislator.district, is_primary: s.is_primary }]
     })
