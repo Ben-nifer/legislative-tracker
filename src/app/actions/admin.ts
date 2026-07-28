@@ -535,6 +535,62 @@ export async function forceSyncSingleBill(
   return { inserted: uniqueRows.length, unmatched, log }
 }
 
+export async function forceSyncSingleBillHistory(
+  fileNumber: string
+): Promise<{ inserted: number; log: string[]; error?: string }> {
+  try { await assertAdmin() } catch (e) { return { inserted: 0, log: [], error: String(e) } }
+
+  const supabase = createServiceClient()
+  const log: string[] = []
+
+  const { data: bill } = await supabase
+    .from('legislation')
+    .select('id, legistar_url, file_number')
+    .ilike('file_number', fileNumber.trim())
+    .maybeSingle()
+
+  if (!bill) return { inserted: 0, log, error: `Bill "${fileNumber}" not found in DB` }
+  if (!bill.legistar_url) return { inserted: 0, log, error: 'Bill has no legistar_url — run legislation sync first' }
+
+  const idMatch = bill.legistar_url.match(/[?&]id=(\d+)/i)
+  const matterId = idMatch?.[1]
+  if (!matterId) return { inserted: 0, log, error: `Could not parse matterId from: ${bill.legistar_url}` }
+
+  log.push(`Fetching history for ${bill.file_number} (matterId=${matterId})…`)
+
+  const { data: existing } = await supabase
+    .from('legislation_history')
+    .select('id', { count: 'exact' })
+    .eq('legislation_id', bill.id)
+  log.push(`Current DB rows: ${existing?.length ?? 0}`)
+
+  const histories = await legistar.getMatterHistories(Number(matterId))
+  log.push(`Legistar returned ${histories.length} history entry(s)`)
+
+  if (histories.length === 0) {
+    return { inserted: 0, log, error: 'Legistar returned no history for this bill' }
+  }
+
+  const rows = histories.map((h) => ({
+    legislation_id: bill.id,
+    action_date: h.MatterHistoryActionDate?.startsWith('0001') ? null : h.MatterHistoryActionDate?.split('T')[0] ?? null,
+    action_text: h.MatterHistoryActionName || null,
+    action_body_name: h.MatterHistoryActionBodyName || null,
+    sequence: h.MatterHistorySequence ?? null,
+    passed_flag: h.MatterHistoryPassedFlag === 1 ? true : h.MatterHistoryPassedFlag === 0 ? false : null,
+  }))
+
+  log.push(`Deleting existing rows…`)
+  await supabase.from('legislation_history').delete().eq('legislation_id', bill.id)
+
+  log.push(`Inserting ${rows.length} row(s) via RPC…`)
+  const { error } = await supabase.rpc('insert_legislation_history', { rows })
+  if (error) return { inserted: 0, log, error: `RPC insert failed: ${error.message}` }
+
+  log.push(`✓ Inserted ${rows.length} row(s)`)
+  return { inserted: rows.length, log }
+}
+
 export async function runSyncEvents(): Promise<{ synced: number; eventsFetched: number; apiFailed: number; error?: string }> {
   try {
     await assertAdmin()
