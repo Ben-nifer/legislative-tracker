@@ -459,52 +459,57 @@ export async function syncHistories(
   return { synced: inserted, offset: nextOffset, total: total ?? 0, done: nextOffset >= (total ?? 0), apiFailed }
 }
 
-// Step 5: Sync upcoming events (hearings) for each bill from Legistar
-export async function syncEvents(
-  offset = 0,
-  concurrency = 5
-): Promise<{ synced: number; offset: number; total: number; done: boolean; apiFailed: number }> {
+// Step 5: Sync upcoming events (hearings) for all bills from Legistar.
+// Queries events forward in time — far fewer records than matter-by-matter.
+export async function syncEvents(): Promise<{ synced: number; eventsFetched: number; apiFailed: number }> {
   const supabase = createServiceClient()
 
-  const { data: batch, count: total } = await supabase
+  // Build a map of Legistar matter ID → our legislation UUID
+  const { data: legislation } = await supabase
     .from('legislation')
-    .select('id, legistar_url', { count: 'exact' })
+    .select('id, legistar_url')
     .not('legistar_url', 'is', null)
-    .order('intro_date', { ascending: false, nullsFirst: false })
-    .range(offset, offset + concurrency - 1)
 
-  if (!batch || batch.length === 0) {
-    return { synced: 0, offset, total: total ?? 0, done: true, apiFailed: 0 }
+  const matterIdToLegislationId = new Map<number, string>()
+  for (const leg of legislation ?? []) {
+    const m = leg.legistar_url!.match(/[?&]id=(\d+)/i)
+    if (m) matterIdToLegislationId.set(Number(m[1]), leg.id)
   }
 
-  const results = await Promise.allSettled(
-    batch.map(async (item) => {
-      const idMatch = item.legistar_url!.match(/[?&]id=(\d+)/i)
-      const matterId = idMatch?.[1]
-      if (!matterId) return []
-      const eventItems = await legistar.getMatterEventItems(Number(matterId))
-      return eventItems
-        .filter((e) => e.EventItemAgendaDate && !e.EventItemAgendaDate.startsWith('0001-01-01'))
-        .map((e) => ({
-          legislation_id: item.id,
-          event_date: e.EventItemAgendaDate,
-          event_type: e.EventItemTitle || null,
-        }))
-    })
-  )
+  // Fetch all upcoming events from Legistar (from today forward)
+  const today = new Date().toISOString().split('T')[0]
+  const upcomingEvents = await legistar.getUpcomingEvents(today)
 
-  await supabase
-    .from('events')
-    .delete()
-    .in('legislation_id', batch.map((b) => b.id))
-
-  const rows: { legislation_id: string; event_date: string; event_type: string | null }[] = []
+  // For each event, fetch its agenda items concurrently in small batches
+  const rows: { legislation_id: string; event_date: string; event_type: string | null; location: string | null }[] = []
   let apiFailed = 0
 
-  for (const result of results) {
-    if (result.status !== 'fulfilled') { apiFailed++; continue }
-    rows.push(...result.value)
+  const BATCH = 5
+  for (let i = 0; i < upcomingEvents.length; i += BATCH) {
+    const eventBatch = upcomingEvents.slice(i, i + BATCH)
+    const results = await Promise.allSettled(
+      eventBatch.map((event) => legistar.getEventItems(event.EventId).then((items) => ({ event, items })))
+    )
+    for (const result of results) {
+      if (result.status !== 'fulfilled') { apiFailed++; continue }
+      const { event, items } = result.value
+      for (const item of items) {
+        if (!item.EventItemMatterId) continue
+        const legislationId = matterIdToLegislationId.get(item.EventItemMatterId)
+        if (!legislationId) continue
+        if (!event.EventDate || event.EventDate.startsWith('0001-01-01')) continue
+        rows.push({
+          legislation_id: legislationId,
+          event_date: event.EventDate,
+          event_type: event.EventBodyName || null,
+          location: event.EventLocation || null,
+        })
+      }
+    }
   }
+
+  // Replace all upcoming events (clean slate each sync)
+  await supabase.from('events').delete().neq('id', '00000000-0000-0000-0000-000000000000')
 
   let inserted = 0
   if (rows.length > 0) {
@@ -513,8 +518,7 @@ export async function syncEvents(
     inserted = rows.length
   }
 
-  const nextOffset = offset + concurrency
-  return { synced: inserted, offset: nextOffset, total: total ?? 0, done: nextOffset >= (total ?? 0), apiFailed }
+  return { synced: inserted, eventsFetched: upcomingEvents.length, apiFailed }
 }
 
 // Step 6: Create empty stats rows for any legislation that doesn't have one yet

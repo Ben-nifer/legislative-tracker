@@ -524,18 +524,16 @@ export async function forceSyncSingleBill(
   return { inserted: rows.length, unmatched, log }
 }
 
-export async function runSyncEvents(
-  offset = 0
-): Promise<{ synced: number; offset: number; total: number; done: boolean; apiFailed: number; error?: string }> {
+export async function runSyncEvents(): Promise<{ synced: number; eventsFetched: number; apiFailed: number; error?: string }> {
   try {
     await assertAdmin()
   } catch (e) {
-    return { synced: 0, offset, total: 0, done: true, apiFailed: 0, error: String(e) }
+    return { synced: 0, eventsFetched: 0, apiFailed: 0, error: String(e) }
   }
   try {
-    return await syncEvents(offset)
+    return await syncEvents()
   } catch (e) {
-    return { synced: 0, offset, total: 0, done: true, apiFailed: 0, error: String(e) }
+    return { synced: 0, eventsFetched: 0, apiFailed: 0, error: String(e) }
   }
 }
 

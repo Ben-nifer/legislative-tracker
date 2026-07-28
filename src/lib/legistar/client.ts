@@ -4,6 +4,7 @@ import type {
   LegistarOfficeRecord,
   LegistarSponsor,
   LegistarHistory,
+  LegistarEvent,
   LegistarEventItem,
 } from './types'
 
@@ -59,10 +60,14 @@ export const legistar = {
   getMatterHistories: (matterId: number) =>
     legistarFetch<LegistarHistory[]>(`/matters/${matterId}/histories`),
 
-  getMatterEventItems: (matterId: number) =>
-    legistarFetch<LegistarEventItem[]>('/eventitems', {
-      '$filter': `EventItemMatterId eq ${matterId}`,
+  getUpcomingEvents: (fromDate: string) =>
+    legistarFetchAll<LegistarEvent>('/events', {
+      '$filter': `EventDate ge datetime'${fromDate}T00:00:00'`,
+      '$orderby': 'EventDate asc',
     }),
+
+  getEventItems: (eventId: number) =>
+    legistarFetch<LegistarEventItem[]>(`/events/${eventId}/eventitems`),
 
   getPersons: () =>
     legistarFetchAll<LegistarPerson>('/persons'),

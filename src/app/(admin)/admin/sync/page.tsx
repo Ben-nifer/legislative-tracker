@@ -198,42 +198,22 @@ function HistoriesCard() {
 
 function EventsCard() {
   const [state, setState] = useState<JobState>('idle')
-  const [log, setLog] = useState<string[]>([])
-  const [autoRun, setAutoRun] = useState(false)
-  const autoRunRef = useRef(false)
+  const [result, setResult] = useState<string | null>(null)
 
-  async function runOnce(offset: number): Promise<{ nextOffset: number; done: boolean }> {
-    const res = await runSyncEvents(offset)
-    setLog((prev) => [
-      `offset ${offset}/${res.total} — synced ${res.synced} events${res.apiFailed > 0 ? `, apiFailed ${res.apiFailed}` : ''}${res.error ? ` — ${res.error}` : ''}`,
-      ...prev.slice(0, 19),
-    ])
-    return { nextOffset: res.offset, done: res.done }
-  }
-
-  async function runAll() {
+  async function run() {
     setState('running')
-    setLog([])
-    autoRunRef.current = true
-    setAutoRun(true)
+    setResult(null)
     try {
-      let offset = 0
-      let done = false
-      while (autoRunRef.current && !done) {
-        const result = await runOnce(offset)
-        offset = result.nextOffset
-        done = result.done
-      }
-      setState('done')
+      const res = await runSyncEvents()
+      setResult(res.error
+        ? `✗ ${res.error}`
+        : `✓ Fetched ${res.eventsFetched} upcoming events, synced ${res.synced} bill links${res.apiFailed > 0 ? `, apiFailed ${res.apiFailed}` : ''}`
+      )
+      setState(res.error ? 'error' : 'done')
     } catch (e) {
-      setLog((prev) => [`✗ error: ${String(e)}`, ...prev])
+      setResult(`✗ ${String(e)}`)
       setState('error')
     }
-    setAutoRun(false)
-  }
-
-  function stop() {
-    autoRunRef.current = false
   }
 
   return (
@@ -246,47 +226,24 @@ function EventsCard() {
           <div>
             <h2 className="font-semibold text-white">Sync Upcoming Events</h2>
             <p className="text-sm text-slate-400 mt-0.5">
-              Fetches scheduled hearings and votes for each bill from Legistar.
-              "Run all" processes every bill in batches of 5.
+              Fetches all upcoming hearings from Legistar and links them to bills.
+              Replaces existing events each run — safe to run repeatedly.
             </p>
           </div>
         </div>
-        <div className="flex gap-2 shrink-0">
-          {autoRun ? (
-            <button onClick={stop} className="text-sm bg-red-700 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors">
-              Stop
-            </button>
-          ) : (
-            <>
-              <button
-                onClick={() => runOnce(0)}
-                disabled={state === 'running'}
-                className="text-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors"
-              >
-                Run once
-              </button>
-              <button
-                onClick={runAll}
-                disabled={state === 'running'}
-                className="text-sm bg-indigo-700 hover:bg-indigo-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
-              >
-                Run all
-              </button>
-            </>
-          )}
-        </div>
+        <button
+          onClick={run}
+          disabled={state === 'running'}
+          className="shrink-0 text-sm bg-indigo-700 hover:bg-indigo-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+        >
+          {state === 'running' && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+          {state === 'running' ? 'Running…' : 'Run now'}
+        </button>
       </div>
 
-      {autoRun && (
-        <div className="flex items-center gap-2 text-sm text-indigo-300">
-          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-          Running continuously — click Stop to pause
-        </div>
-      )}
-
-      {log.length > 0 && (
-        <div className="text-xs rounded-lg p-3 font-mono bg-slate-900/60 text-slate-300 space-y-1 max-h-48 overflow-y-auto">
-          {log.map((line, i) => <div key={i}>{line}</div>)}
+      {result && (
+        <div className={`text-xs rounded-lg p-3 font-mono ${state === 'error' ? 'bg-red-500/10 text-red-400' : 'bg-slate-900/60 text-slate-300'}`}>
+          {result}
         </div>
       )}
     </div>

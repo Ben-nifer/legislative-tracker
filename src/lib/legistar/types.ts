@@ -64,10 +64,17 @@ export interface LegistarHistory {
   MatterHistorySequence: number           // chronological ordering
 }
 
+export interface LegistarEvent {
+  EventId: number
+  EventBodyName: string          // e.g. "Committee on Finance", "City Council"
+  EventDate: string              // ISO date string
+  EventLocation: string | null
+  EventAgendaStatusName: string  // "Draft", "Final", etc.
+}
+
 export interface LegistarEventItem {
   EventItemId: number
   EventItemEventId: number
-  EventItemMatterId: number
-  EventItemAgendaDate: string    // ISO date string
-  EventItemTitle: string | null  // event/hearing type description
+  EventItemMatterId: number | null  // null if the agenda item isn't a bill
+  EventItemTitle: string | null
 }
