@@ -3,7 +3,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { createServerSupabaseClient, createServiceClient } from '@/lib/supabase/server'
 import { summarizeLegislation } from '@/lib/ai/summarize'
-import { syncSponsorships, syncCouncilMembers, syncCommitteeMemberships, syncHistories, fullSync } from '@/lib/legistar/sync'
+import { syncSponsorships, syncCouncilMembers, syncCommitteeMemberships, syncHistories, syncEvents, fullSync } from '@/lib/legistar/sync'
 import { legistar } from '@/lib/legistar/client'
 import { scrapeAndSyncDistrictData } from '@/lib/council/scrape-districts'
 import { syncCommunityBoardsFromOpenData } from '@/lib/council/sync-community-boards'
@@ -522,6 +522,21 @@ export async function forceSyncSingleBill(
   }
 
   return { inserted: rows.length, unmatched, log }
+}
+
+export async function runSyncEvents(
+  offset = 0
+): Promise<{ synced: number; offset: number; total: number; done: boolean; apiFailed: number; error?: string }> {
+  try {
+    await assertAdmin()
+  } catch (e) {
+    return { synced: 0, offset, total: 0, done: true, apiFailed: 0, error: String(e) }
+  }
+  try {
+    return await syncEvents(offset)
+  } catch (e) {
+    return { synced: 0, offset, total: 0, done: true, apiFailed: 0, error: String(e) }
+  }
 }
 
 export async function runRefreshStats(): Promise<{

@@ -4,9 +4,7 @@ import { notFound } from 'next/navigation'
 import ViewLogger from '@/components/legislation/ViewLogger'
 import {
   MessageSquare,
-  Calendar,
   User,
-  Building2,
   ExternalLink,
   FileText,
   ArrowLeft,
@@ -410,117 +408,107 @@ export default async function LegislationDetailPage({
             </div>
           </section>
 
-          {/* ── Two-col: Sponsors + Details ─────────────────────────── */}
-          <div className="grid gap-4 sm:grid-cols-2">
-
-            {/* Sponsors */}
-            <section className="rounded border border-nyc-border bg-nyc-card p-5">
-              <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-nyc-muted">
-                <User size={14} /> Sponsors
-              </h2>
-              {legislation.sponsors.length === 0 ? (
-                <p className="text-sm italic text-nyc-muted">No sponsors listed.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {primarySponsor && (
-                    <li className="flex items-center justify-between">
-                      <Link
-                        href={`/council-members/${primarySponsor.slug}`}
-                        className="text-sm font-medium text-nyc-orange hover:underline"
-                      >
-                        {primarySponsor.full_name}
-                      </Link>
-                      <span className="rounded border border-nyc-orange/30 bg-nyc-orange/10 px-2 py-0.5 text-xs text-nyc-orange">
-                        Primary
-                      </span>
-                    </li>
-                  )}
-                  {coSponsors.map((s) => (
-                    <li key={s.slug} className="flex items-center justify-between">
-                      <Link
-                        href={`/council-members/${s.slug}`}
-                        className="text-sm text-nyc-blue hover:text-nyc-orange hover:underline"
-                      >
-                        {s.full_name}
-                      </Link>
-                      {s.district && (
-                        <span className="text-xs text-nyc-muted">Dist. {s.district}</span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-
-            {/* Bill details */}
-            <section className="rounded border border-nyc-border bg-nyc-card p-5">
-              <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-nyc-muted">
-                <Building2 size={14} /> Details
-              </h2>
-              <dl className="space-y-2 text-sm">
-                {legislation.committee_name && (
-                  <div className="flex justify-between gap-2">
-                    <dt className="text-nyc-muted">Committee</dt>
-                    <dd className="text-right text-nyc-blue">{legislation.committee_name}</dd>
-                  </div>
+          {/* ── Sponsors ────────────────────────────────────────────── */}
+          <section className="rounded border border-nyc-border bg-nyc-card p-5">
+            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-nyc-muted">
+              <User size={14} /> Sponsors
+            </h2>
+            {legislation.sponsors.length === 0 ? (
+              <p className="text-sm italic text-nyc-muted">No sponsors listed.</p>
+            ) : (
+              <ul className="grid gap-2 sm:grid-cols-2">
+                {primarySponsor && (
+                  <li className="flex items-center justify-between">
+                    <Link
+                      href={`/council-members/${primarySponsor.slug}`}
+                      className="text-sm font-medium text-nyc-orange hover:underline"
+                    >
+                      {primarySponsor.full_name}
+                    </Link>
+                    <span className="rounded border border-nyc-orange/30 bg-nyc-orange/10 px-2 py-0.5 text-xs text-nyc-orange">
+                      Primary
+                    </span>
+                  </li>
                 )}
-                {legislation.intro_date && (
-                  <div className="flex justify-between gap-2">
-                    <dt className="text-nyc-muted">Introduced</dt>
-                    <dd className="text-nyc-blue">{fmt(legislation.intro_date)}</dd>
-                  </div>
-                )}
-                {legislation.last_action_date && (
-                  <div className="flex justify-between gap-2">
-                    <dt className="text-nyc-muted">Last Action</dt>
-                    <dd className="text-nyc-blue">{fmt(legislation.last_action_date)}</dd>
-                  </div>
-                )}
-              </dl>
-            </section>
-          </div>
-
-          {/* ── Upcoming Hearings ───────────────────────────────────── */}
-          {legislation.upcoming_hearings.length > 0 && (
-            <section className="rounded border border-blue-200 bg-blue-50 p-5">
-              <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-nyc-blue">
-                <Calendar size={14} /> Upcoming Hearings
-              </h2>
-              <ul className="space-y-3">
-                {legislation.upcoming_hearings.map((hearing) => (
-                  <li key={hearing.id} className="flex items-start gap-3">
-                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded bg-nyc-blue/10 text-nyc-blue">
-                      <Calendar size={14} />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-nyc-blue">
-                        {hearing.event_type ?? 'Hearing'}
-                      </p>
-                      {hearing.event_date && (
-                        <p className="text-xs text-nyc-muted">
-                          {format(new Date(hearing.event_date), 'EEEE, MMM d, yyyy · h:mm a')}
-                          <span className="ml-1 text-nyc-muted/60">
-                            ({formatDistanceToNow(new Date(hearing.event_date), { addSuffix: true })})
-                          </span>
-                        </p>
-                      )}
-                      {hearing.location && (
-                        <p className="text-xs text-nyc-muted">{hearing.location}</p>
-                      )}
-                      {hearing.video_url && (
-                        <a
-                          href={hearing.video_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="mt-1 inline-flex items-center gap-1 text-xs text-nyc-orange hover:underline"
-                        >
-                          Watch live <ExternalLink size={10} />
-                        </a>
-                      )}
-                    </div>
+                {coSponsors.map((s) => (
+                  <li key={s.slug} className="flex items-center justify-between">
+                    <Link
+                      href={`/council-members/${s.slug}`}
+                      className="text-sm text-nyc-blue hover:text-nyc-orange hover:underline"
+                    >
+                      {s.full_name}
+                    </Link>
+                    {s.district && (
+                      <span className="text-xs text-nyc-muted">Dist. {s.district}</span>
+                    )}
                   </li>
                 ))}
               </ul>
+            )}
+          </section>
+
+          {/* ── Activity: Upcoming Events + History ─────────────────── */}
+          {(legislation.upcoming_hearings.length > 0 || legislation.history.length > 0) && (
+            <section className="rounded border border-nyc-border bg-nyc-card p-5">
+              <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-nyc-muted">
+                <Clock size={14} /> Activity
+              </h2>
+              <ol className="relative border-l border-nyc-border pl-5 space-y-4">
+                {/* Upcoming events at the top */}
+                {legislation.upcoming_hearings.map((hearing) => (
+                  <li key={hearing.id} className="relative">
+                    <span className="absolute -left-[21px] h-3 w-3 rounded-full border-2 border-nyc-card bg-blue-500" />
+                    <div className="flex items-center gap-2">
+                      <span className="rounded bg-blue-500/10 px-1.5 py-0.5 text-xs font-medium text-blue-600">
+                        Upcoming
+                      </span>
+                      <p className="text-sm font-medium text-nyc-blue">
+                        {hearing.event_type ?? 'Hearing'}
+                      </p>
+                    </div>
+                    {hearing.event_date && (
+                      <p className="mt-0.5 text-xs text-nyc-muted">
+                        {format(new Date(hearing.event_date), 'EEEE, MMM d, yyyy · h:mm a')}
+                        <span className="ml-1.5 text-nyc-muted/60">
+                          · {formatDistanceToNow(new Date(hearing.event_date), { addSuffix: true })}
+                        </span>
+                      </p>
+                    )}
+                    {hearing.location && (
+                      <p className="mt-0.5 text-xs text-nyc-muted">{hearing.location}</p>
+                    )}
+                  </li>
+                ))}
+                {/* Past history below */}
+                {legislation.history.map((item, i) => {
+                  const dotColor = item.passed_flag === true
+                    ? 'bg-emerald-500'
+                    : item.passed_flag === false
+                    ? 'bg-red-500'
+                    : i === 0 && legislation.upcoming_hearings.length === 0
+                    ? 'bg-nyc-orange'
+                    : 'bg-nyc-muted/40'
+                  return (
+                    <li key={item.id} className="relative">
+                      <span className={`absolute -left-[21px] h-3 w-3 rounded-full border-2 border-nyc-card ${dotColor}`} />
+                      <p className="text-sm text-nyc-blue">
+                        {item.action_text ?? 'Action recorded'}
+                      </p>
+                      {item.action_body_name && (
+                        <p className="mt-0.5 text-xs text-nyc-muted">{item.action_body_name}</p>
+                      )}
+                      {item.action_date && (
+                        <p className="mt-0.5 text-xs text-nyc-muted/60">
+                          {fmt(item.action_date)}
+                          <span className="ml-1.5">
+                            · {formatDistanceToNow(new Date(item.action_date), { addSuffix: true })}
+                          </span>
+                        </p>
+                      )}
+                    </li>
+                  )
+                })}
+              </ol>
             </section>
           )}
 
@@ -538,47 +526,6 @@ export default async function LegislationDetailPage({
               friendsFollowing={friendsFollowing}
             />
           </section>
-
-          {/* ── Action history ──────────────────────────────────────── */}
-          {legislation.history.length > 0 && (
-            <section className="rounded border border-nyc-border bg-nyc-card p-5">
-              <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-nyc-muted">
-                <Clock size={14} /> History
-              </h2>
-              <ol className="relative border-l border-nyc-border pl-5 space-y-4">
-                {legislation.history.map((item, i) => {
-                  const dotColor = item.passed_flag === true
-                    ? 'bg-emerald-500'
-                    : item.passed_flag === false
-                    ? 'bg-red-500'
-                    : i === 0
-                    ? 'bg-nyc-orange'
-                    : 'bg-nyc-muted/40'
-                  return (
-                    <li key={item.id} className="relative">
-                      <span className={`absolute -left-[21px] h-3 w-3 rounded-full border-2 border-nyc-card ${dotColor}`} />
-                      <p className="text-sm text-nyc-blue">
-                        {item.action_text ?? 'Action recorded'}
-                      </p>
-                      {item.action_body_name && (
-                        <p className="mt-0.5 text-xs text-nyc-muted">
-                          {item.action_body_name}
-                        </p>
-                      )}
-                      {item.action_date && (
-                        <p className="mt-0.5 text-xs text-nyc-muted/60">
-                          {fmt(item.action_date)}
-                          <span className="ml-1.5">
-                            · {formatDistanceToNow(new Date(item.action_date), { addSuffix: true })}
-                          </span>
-                        </p>
-                      )}
-                    </li>
-                  )
-                })}
-              </ol>
-            </section>
-          )}
 
           {/* ── Comments ────────────────────────────────────────────── */}
           <div className="rounded border border-nyc-border bg-nyc-card p-5">

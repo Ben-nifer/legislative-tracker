@@ -4,6 +4,7 @@ import type {
   LegistarOfficeRecord,
   LegistarSponsor,
   LegistarHistory,
+  LegistarEventItem,
 } from './types'
 
 const BASE_URL = 'https://webapi.legistar.com/v1/nyc'
@@ -57,6 +58,9 @@ export const legistar = {
 
   getMatterHistories: (matterId: number) =>
     legistarFetch<LegistarHistory[]>(`/matters/${matterId}/histories`),
+
+  getMatterEventItems: (matterId: number) =>
+    legistarFetch<LegistarEventItem[]>(`/matters/${matterId}/eventitems`),
 
   getPersons: () =>
     legistarFetchAll<LegistarPerson>('/persons'),

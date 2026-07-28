@@ -47,7 +47,7 @@ type NewsItem = { title: string; link: string; pubDate: string; source: string }
 
 async function fetchNewsItems(memberName: string): Promise<NewsItem[]> {
   try {
-    const q = encodeURIComponent(`"${memberName}" NYC Council`)
+    const q = encodeURIComponent(`"${memberName}" "New York City"`)
     const res = await fetch(
       `https://news.google.com/rss/search?q=${q}&hl=en-US&gl=US&ceid=US:en`,
       { next: { revalidate: 3600 } }

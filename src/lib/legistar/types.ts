@@ -63,3 +63,11 @@ export interface LegistarHistory {
   MatterHistoryActionBodyName: string     // e.g. "Committee on Finance", "City Council"
   MatterHistorySequence: number           // chronological ordering
 }
+
+export interface LegistarEventItem {
+  EventItemId: number
+  EventItemEventId: number
+  EventItemMatterId: number
+  EventItemAgendaDate: string    // ISO date string
+  EventItemTitle: string | null  // event/hearing type description
+}
