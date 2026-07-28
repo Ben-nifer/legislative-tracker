@@ -60,7 +60,9 @@ export const legistar = {
     legistarFetch<LegistarHistory[]>(`/matters/${matterId}/histories`),
 
   getMatterEventItems: (matterId: number) =>
-    legistarFetch<LegistarEventItem[]>(`/matters/${matterId}/eventitems`),
+    legistarFetch<LegistarEventItem[]>('/eventitems', {
+      '$filter': `EventItemMatterId eq ${matterId}`,
+    }),
 
   getPersons: () =>
     legistarFetchAll<LegistarPerson>('/persons'),
