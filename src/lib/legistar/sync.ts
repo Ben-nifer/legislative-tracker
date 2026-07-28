@@ -691,6 +691,7 @@ export async function fullSync(since = '2022-01-01') {
   const legislation = await syncLegislation(since)
   console.log(`✅ Synced ${legislation} pieces of legislation`)
 
+  // Sponsorships: re-sync the newest 100 bills (newest bills are most likely to be new/missing)
   let sOffset = 0
   let sponsorships = 0
   const MAX_SPONSORSHIP_BATCHES = 20
@@ -702,8 +703,21 @@ export async function fullSync(since = '2022-01-01') {
   }
   console.log(`✅ Synced ${sponsorships} sponsorships`)
 
+  // Histories: incremental — only fetch for bills that have no history yet.
+  // Skipped batches cost only a DB query, so 500 batches (2500 bills checked) is fast.
+  let hOffset = 0
+  let histories = 0
+  const MAX_HISTORY_BATCHES = 500
+  for (let i = 0; i < MAX_HISTORY_BATCHES; i++) {
+    const result = await syncHistories(hOffset, 5, true)
+    histories += result.synced
+    if (result.done) break
+    hOffset = result.offset
+  }
+  console.log(`✅ Synced ${histories} history rows for new bills`)
+
   const stats = await initializeMissingStats()
   console.log(`✅ Initialized stats for ${stats} legislation items`)
 
-  return { legislators, legislation, sponsorships, stats }
+  return { legislators, legislation, sponsorships, histories, stats }
 }
