@@ -487,7 +487,6 @@ export async function syncEvents(
         .filter((e) => e.EventItemAgendaDate && !e.EventItemAgendaDate.startsWith('0001-01-01'))
         .map((e) => ({
           legislation_id: item.id,
-          legistar_id: e.EventItemId,
           event_date: e.EventItemAgendaDate,
           event_type: e.EventItemTitle || null,
         }))
@@ -499,7 +498,7 @@ export async function syncEvents(
     .delete()
     .in('legislation_id', batch.map((b) => b.id))
 
-  const rows: { legislation_id: string; legistar_id: number; event_date: string; event_type: string | null }[] = []
+  const rows: { legislation_id: string; event_date: string; event_type: string | null }[] = []
   let apiFailed = 0
 
   for (const result of results) {
