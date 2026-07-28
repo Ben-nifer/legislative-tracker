@@ -400,8 +400,9 @@ export async function syncSponsorships(
 // Step 4: Sync action history for each bill from Legistar
 export async function syncHistories(
   offset = 0,
-  concurrency = 5
-): Promise<{ synced: number; offset: number; total: number; done: boolean; apiFailed: number }> {
+  concurrency = 5,
+  skipExisting = false
+): Promise<{ synced: number; skipped: number; offset: number; total: number; done: boolean; apiFailed: number }> {
   const supabase = createServiceClient()
 
   const { data: batch, count: total } = await supabase
@@ -412,66 +413,84 @@ export async function syncHistories(
     .range(offset, offset + concurrency - 1)
 
   if (!batch || batch.length === 0) {
-    return { synced: 0, offset, total: total ?? 0, done: true, apiFailed: 0 }
+    return { synced: 0, skipped: 0, offset, total: total ?? 0, done: true, apiFailed: 0 }
   }
 
+  // In incremental mode, skip bills that already have history rows
+  let toFetch = batch
+  let skipped = 0
+  if (skipExisting) {
+    const { data: existing } = await supabase
+      .from('legislation_history')
+      .select('legislation_id')
+      .in('legislation_id', batch.map((b) => b.id))
+    const existingIds = new Set((existing ?? []).map((r) => r.legislation_id))
+    toFetch = batch.filter((b) => !existingIds.has(b.id))
+    skipped = batch.length - toFetch.length
+  }
+
+  if (toFetch.length === 0) {
+    const nextOffset = offset + concurrency
+    return { synced: 0, skipped, offset: nextOffset, total: total ?? 0, done: nextOffset >= (total ?? 0), apiFailed: 0 }
+  }
+
+  // Fetch from Legistar BEFORE deleting anything
   const results = await Promise.allSettled(
-    batch.map(async (item) => {
+    toFetch.map(async (item) => {
       const idMatch = item.legistar_url!.match(/[?&]id=(\d+)/i)
       const matterId = idMatch?.[1]
-      if (!matterId) return []
+      if (!matterId) return { id: item.id, rows: [] }
       const histories = await legistar.getMatterHistories(Number(matterId))
-      return histories.map((h) => ({
-        legislation_id: item.id,
-        legistar_id: h.MatterHistoryId,
-        action_date: parseLegistarDate(h.MatterHistoryActionDate),
-        action_text: h.MatterHistoryActionName || null,
-        action_body_name: h.MatterHistoryActionBodyName || null,
-        sequence: h.MatterHistorySequence ?? null,
-        passed_flag: h.MatterHistoryPassedFlag === 1 ? true : h.MatterHistoryPassedFlag === 0 ? false : null,
-      }))
+      return {
+        id: item.id,
+        rows: histories.map((h) => ({
+          legislation_id: item.id,
+          action_date: parseLegistarDate(h.MatterHistoryActionDate),
+          action_text: h.MatterHistoryActionName || null,
+          action_body_name: h.MatterHistoryActionBodyName || null,
+          sequence: h.MatterHistorySequence ?? null,
+          passed_flag: h.MatterHistoryPassedFlag === 1 ? true : h.MatterHistoryPassedFlag === 0 ? false : null,
+        })),
+      }
     })
   )
 
-  // Delete existing rows for this batch (idempotent)
-  await supabase
-    .from('legislation_history')
-    .delete()
-    .in('legislation_id', batch.map((b) => b.id))
-
   const rows: {
     legislation_id: string
-    legistar_id: number
     action_date: string | null
     action_text: string | null
     action_body_name: string | null
     sequence: number | null
     passed_flag: boolean | null
   }[] = []
+  const billsWithData = new Set<string>()
   let apiFailed = 0
 
   for (const result of results) {
     if (result.status !== 'fulfilled') { apiFailed++; continue }
-    rows.push(...result.value)
+    if (result.value.rows.length > 0) {
+      billsWithData.add(result.value.id)
+      rows.push(...result.value.rows)
+    }
+  }
+
+  // Only delete bills where we actually got replacement data
+  if (billsWithData.size > 0) {
+    await supabase
+      .from('legislation_history')
+      .delete()
+      .in('legislation_id', [...billsWithData])
   }
 
   let inserted = 0
   if (rows.length > 0) {
-    const rpcRows = rows.map(({ legislation_id, action_date, action_text, action_body_name, sequence, passed_flag }) => ({
-      legislation_id,
-      action_date,
-      action_text,
-      action_body_name,
-      sequence,
-      passed_flag,
-    }))
-    const { error } = await supabase.rpc('insert_legislation_history', { rows: rpcRows })
+    const { error } = await supabase.rpc('insert_legislation_history', { rows })
     if (error) throw new Error(`History insert failed: ${error.message}`)
     inserted = rows.length
   }
 
   const nextOffset = offset + concurrency
-  return { synced: inserted, offset: nextOffset, total: total ?? 0, done: nextOffset >= (total ?? 0), apiFailed }
+  return { synced: inserted, skipped, offset: nextOffset, total: total ?? 0, done: nextOffset >= (total ?? 0), apiFailed }
 }
 
 // Step 5: Sync upcoming events (hearings) for all bills from Legistar.

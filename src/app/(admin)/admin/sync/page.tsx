@@ -105,16 +105,17 @@ function HistoriesCard() {
   const [autoRun, setAutoRun] = useState(false)
   const autoRunRef = useRef(false)
 
-  async function runOnce(offset: number): Promise<{ nextOffset: number; done: boolean }> {
-    const res = await runSyncHistories(offset)
+  async function runOnce(offset: number, skipExisting: boolean): Promise<{ nextOffset: number; done: boolean }> {
+    const res = await runSyncHistories(offset, skipExisting)
+    const skippedNote = res.skipped > 0 ? `, skipped ${res.skipped}` : ''
     setLog((prev) => [
-      `offset ${offset}/${res.total} — synced ${res.synced} history rows${res.apiFailed > 0 ? `, apiFailed ${res.apiFailed}` : ''}${res.error ? ` — ${res.error}` : ''}`,
+      `offset ${offset}/${res.total} — synced ${res.synced} rows${skippedNote}${res.apiFailed > 0 ? `, apiFailed ${res.apiFailed}` : ''}${res.error ? ` — ${res.error}` : ''}`,
       ...prev.slice(0, 19),
     ])
     return { nextOffset: res.offset, done: res.done }
   }
 
-  async function runAll() {
+  async function runAll(skipExisting: boolean) {
     setState('running')
     setLog([])
     autoRunRef.current = true
@@ -123,7 +124,7 @@ function HistoriesCard() {
       let offset = 0
       let done = false
       while (autoRunRef.current && !done) {
-        const result = await runOnce(offset)
+        const result = await runOnce(offset, skipExisting)
         offset = result.nextOffset
         done = result.done
       }
@@ -149,8 +150,9 @@ function HistoriesCard() {
           <div>
             <h2 className="font-semibold text-white">Sync Bill History</h2>
             <p className="text-sm text-slate-400 mt-0.5">
-              Fetches the full action ledger for each bill from Legistar — who took each action, when, and the outcome.
-              "Run all" processes every bill in batches of 5.
+              Fetches the action ledger for each bill from Legistar.
+              <span className="text-slate-300"> New bills only</span> skips bills that already have history — fast, run after any legislation sync.
+              <span className="text-slate-300"> Run all</span> re-fetches everything.
             </p>
           </div>
         </div>
@@ -162,14 +164,21 @@ function HistoriesCard() {
           ) : (
             <>
               <button
-                onClick={() => runOnce(0)}
+                onClick={() => runOnce(0, false)}
                 disabled={state === 'running'}
                 className="text-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors"
               >
                 Run once
               </button>
               <button
-                onClick={runAll}
+                onClick={() => runAll(true)}
+                disabled={state === 'running'}
+                className="text-sm bg-slate-600 hover:bg-slate-500 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                New bills only
+              </button>
+              <button
+                onClick={() => runAll(false)}
                 disabled={state === 'running'}
                 className="text-sm bg-indigo-700 hover:bg-indigo-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
               >

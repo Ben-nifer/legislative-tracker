@@ -379,17 +379,18 @@ export async function runSyncLegislation(): Promise<{
  * Replaces the browser-side CronJobCard fetch so no NEXT_PUBLIC secret is needed.
  */
 export async function runSyncHistories(
-  offset = 0
-): Promise<{ synced: number; offset: number; total: number; done: boolean; apiFailed: number; error?: string }> {
+  offset = 0,
+  skipExisting = false
+): Promise<{ synced: number; skipped: number; offset: number; total: number; done: boolean; apiFailed: number; error?: string }> {
   try {
     await assertAdmin()
   } catch (e) {
-    return { synced: 0, offset, total: 0, done: true, apiFailed: 0, error: String(e) }
+    return { synced: 0, skipped: 0, offset, total: 0, done: true, apiFailed: 0, error: String(e) }
   }
   try {
-    return await syncHistories(offset)
+    return await syncHistories(offset, 5, skipExisting)
   } catch (e) {
-    return { synced: 0, offset, total: 0, done: true, apiFailed: 0, error: String(e) }
+    return { synced: 0, skipped: 0, offset, total: 0, done: true, apiFailed: 0, error: String(e) }
   }
 }
 
