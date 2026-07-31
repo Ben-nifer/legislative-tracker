@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { checkModeration } from '@/lib/moderation/check'
 
 // Temporary diagnostic route to confirm the OpenAI moderation integration is
 // actually working in production. Remove after use.
@@ -9,8 +8,34 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const hasKey = Boolean(process.env.OPENAI_API_KEY)
-  const result = await checkModeration('I want to kill them.')
+  const apiKey = process.env.OPENAI_API_KEY
+  const hasKey = Boolean(apiKey)
+  const keyPrefix = apiKey ? apiKey.slice(0, 7) : null
 
-  return NextResponse.json({ hasKey, result })
+  try {
+    const res = await fetch('https://api.openai.com/v1/moderations', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({ input: 'I want to kill them.' }),
+    })
+
+    const bodyText = await res.text()
+
+    return NextResponse.json({
+      hasKey,
+      keyPrefix,
+      httpStatus: res.status,
+      ok: res.ok,
+      body: bodyText.slice(0, 1000),
+    })
+  } catch (error) {
+    return NextResponse.json({
+      hasKey,
+      keyPrefix,
+      fetchError: error instanceof Error ? error.message : String(error),
+    })
+  }
 }
