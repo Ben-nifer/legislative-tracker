@@ -9,7 +9,10 @@ export type ModerationResult = {
  */
 export async function checkModeration(text: string): Promise<ModerationResult> {
   const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) return { flagged: false, categories: [] }
+  if (!apiKey) {
+    console.error('Moderation skipped: OPENAI_API_KEY is not set')
+    return { flagged: false, categories: [] }
+  }
 
   try {
     const res = await fetch('https://api.openai.com/v1/moderations', {
@@ -21,7 +24,10 @@ export async function checkModeration(text: string): Promise<ModerationResult> {
       body: JSON.stringify({ input: text }),
     })
 
-    if (!res.ok) return { flagged: false, categories: [] }
+    if (!res.ok) {
+      console.error('Moderation API request failed:', res.status, await res.text())
+      return { flagged: false, categories: [] }
+    }
 
     const data = await res.json()
     const result = data.results?.[0]
@@ -32,8 +38,9 @@ export async function checkModeration(text: string): Promise<ModerationResult> {
       .map(([key]) => key)
 
     return { flagged: result.flagged ?? false, categories: flaggedCategories }
-  } catch {
+  } catch (error) {
     // Never block a post due to a moderation API failure
+    console.error('Moderation API request threw:', error)
     return { flagged: false, categories: [] }
   }
 }
