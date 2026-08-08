@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { Heart, MessageCircle, Lightbulb, Bug, Trash2 } from 'lucide-react'
+import { Heart, MessageCircle, Lightbulb, Bug, Sparkles, Trash2 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { toggleFeedbackLike, deleteFeedbackPost } from '@/app/actions/feedback'
 import { useRouter } from 'next/navigation'
@@ -24,6 +24,7 @@ export default function FeedbackCard({
   const [expanded, setExpanded] = useState(false)
 
   const isFeature = post.type === 'feature'
+  const isName = post.type === 'name'
   const isOwner = currentUserId === post.user_id
   const isLong = post.body.length > 240
   const displayBody = isLong && !expanded ? post.body.slice(0, 240) + '…' : post.body
@@ -64,11 +65,13 @@ export default function FeedbackCard({
               'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-bold',
               isFeature
                 ? 'bg-indigo-100 text-indigo-700'
+                : isName
+                ? 'bg-amber-100 text-amber-700'
                 : 'bg-red-100 text-red-700',
             ].join(' ')}
           >
-            {isFeature ? <Lightbulb size={11} /> : <Bug size={11} />}
-            {isFeature ? 'Feature Request' : 'Bug Report'}
+            {isFeature ? <Lightbulb size={11} /> : isName ? <Sparkles size={11} /> : <Bug size={11} />}
+            {isFeature ? 'Feature Request' : isName ? 'Name Idea' : 'Bug Report'}
           </span>
           <span className="text-xs text-nyc-muted/70">{timeAgo}</span>
         </div>

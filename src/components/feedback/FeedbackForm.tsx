@@ -3,7 +3,7 @@
 import { useState, useRef } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { Lightbulb, Bug, ImageIcon, X, Loader2, Send } from 'lucide-react'
+import { Lightbulb, Bug, Sparkles, ImageIcon, X, Loader2, Send } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { submitFeedback } from '@/app/actions/feedback'
@@ -14,7 +14,7 @@ const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 
 export default function FeedbackForm({ userId }: { userId: string | null }) {
   const router = useRouter()
-  const [type, setType] = useState<'feature' | 'bug'>('feature')
+  const [type, setType] = useState<'feature' | 'bug' | 'name'>('feature')
   const [body, setBody] = useState('')
   const [preview, setPreview] = useState<string | null>(null)
   const [file, setFile] = useState<File | null>(null)
@@ -112,32 +112,45 @@ export default function FeedbackForm({ userId }: { userId: string | null }) {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Type selector */}
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <button
             type="button"
             onClick={() => setType('feature')}
             className={[
-              'flex items-center justify-center gap-2 rounded-lg border py-2.5 text-sm font-bold transition-colors',
+              'flex items-center justify-center gap-1.5 rounded-lg border py-2.5 text-xs font-bold transition-colors',
               type === 'feature'
                 ? 'border-indigo-400 bg-indigo-50 text-indigo-700'
                 : 'border-nyc-border text-nyc-muted hover:border-indigo-300 hover:text-indigo-600',
             ].join(' ')}
           >
-            <Lightbulb size={14} />
+            <Lightbulb size={13} />
             Feature
           </button>
           <button
             type="button"
             onClick={() => setType('bug')}
             className={[
-              'flex items-center justify-center gap-2 rounded-lg border py-2.5 text-sm font-bold transition-colors',
+              'flex items-center justify-center gap-1.5 rounded-lg border py-2.5 text-xs font-bold transition-colors',
               type === 'bug'
                 ? 'border-red-400 bg-red-50 text-red-700'
                 : 'border-nyc-border text-nyc-muted hover:border-red-300 hover:text-red-600',
             ].join(' ')}
           >
-            <Bug size={14} />
+            <Bug size={13} />
             Bug
+          </button>
+          <button
+            type="button"
+            onClick={() => setType('name')}
+            className={[
+              'flex items-center justify-center gap-1.5 rounded-lg border py-2.5 text-xs font-bold transition-colors',
+              type === 'name'
+                ? 'border-amber-400 bg-amber-50 text-amber-700'
+                : 'border-nyc-border text-nyc-muted hover:border-amber-300 hover:text-amber-600',
+            ].join(' ')}
+          >
+            <Sparkles size={13} />
+            Name
           </button>
         </div>
 
@@ -151,7 +164,9 @@ export default function FeedbackForm({ userId }: { userId: string | null }) {
             placeholder={
               type === 'feature'
                 ? "Describe the feature you'd like to see..."
-                : 'Describe the bug you encountered...'
+                : type === 'bug'
+                ? 'Describe the bug you encountered...'
+                : 'Suggest a name for the app...'
             }
             className="w-full resize-none rounded-lg border border-nyc-border bg-white p-3 text-sm text-nyc-blue placeholder-nyc-muted/40 focus:border-nyc-orange focus:outline-none focus:ring-1 focus:ring-nyc-orange transition-colors"
           />

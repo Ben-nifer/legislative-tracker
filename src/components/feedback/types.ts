@@ -1,6 +1,6 @@
 export type FeedbackPost = {
   id: string
-  type: 'feature' | 'bug'
+  type: 'feature' | 'bug' | 'name'
   body: string
   media_url: string | null
   created_at: string

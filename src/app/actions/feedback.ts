@@ -6,7 +6,7 @@ import { checkModeration } from '@/lib/moderation/check'
 import { feedbackRateLimit, commentRateLimit } from '@/lib/rate-limit'
 
 export async function submitFeedback(
-  type: 'feature' | 'bug',
+  type: 'feature' | 'bug' | 'name',
   body: string,
   mediaUrl?: string | null,
   mediaType?: string | null,
