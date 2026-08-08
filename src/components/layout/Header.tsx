@@ -12,6 +12,7 @@ const PUBLIC_NAV_LINKS = [
 
 const AUTH_NAV_LINKS = [
   { href: '/following', label: 'Following' },
+  { href: '/feedback', label: 'Feedback' },
 ]
 
 export default async function Header() {

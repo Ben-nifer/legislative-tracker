@@ -35,3 +35,9 @@ export const geocodeRateLimit = new Ratelimit({
   limiter: Ratelimit.slidingWindow(5, '1 h'),
   prefix: 'rl:geocode',
 })
+
+export const feedbackRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(5, '1 h'),
+  prefix: 'rl:feedback',
+})

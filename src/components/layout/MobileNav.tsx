@@ -8,6 +8,7 @@ const NAV_LINKS = [
   { href: '/legislation', label: 'Legislation' },
   { href: '/council-members', label: 'Council Members' },
   { href: '/trending', label: 'Trending' },
+  { href: '/feedback', label: 'Feedback' },
 ]
 
 const AUTH_LINKS = [
