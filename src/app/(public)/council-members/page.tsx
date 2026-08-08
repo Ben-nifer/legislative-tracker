@@ -105,22 +105,26 @@ export default async function CouncilMembersPage({
   const memberList = members ?? []
   const memberIds = memberList.map((m) => m.id)
 
-  // Always fetch stats (no borough view)
-  const { data: sponsorships } = await supabase
-    .from('sponsorships')
-    .select('legislator_id, legislation_id')
-    .in('legislator_id', memberIds)
-
-  const legIds = [...new Set((sponsorships ?? []).map((s) => s.legislation_id))]
-
+  // Fetch stances and comments first (small tables), then only look up sponsorships
+  // for the legislation that actually has engagement. This avoids Supabase's 1000-row
+  // default limit on the sponsorships table (47k+ rows for active members).
   const [{ data: stanceRows }, { data: commentRows }] = await Promise.all([
-    legIds.length > 0
-      ? supabase.from('user_stances').select('legislation_id, stance').in('legislation_id', legIds)
-      : Promise.resolve({ data: [] }),
-    legIds.length > 0
-      ? supabase.from('comments').select('legislation_id').eq('is_hidden', false).in('legislation_id', legIds)
-      : Promise.resolve({ data: [] }),
+    supabase.from('user_stances').select('legislation_id, stance'),
+    supabase.from('comments').select('legislation_id').eq('is_hidden', false),
   ])
+
+  const engagedLegIds = [...new Set([
+    ...(stanceRows ?? []).map((s) => s.legislation_id),
+    ...(commentRows ?? []).map((c) => c.legislation_id),
+  ])]
+
+  const { data: sponsorships } = engagedLegIds.length > 0
+    ? await supabase
+        .from('sponsorships')
+        .select('legislator_id, legislation_id')
+        .in('legislation_id', engagedLegIds)
+        .in('legislator_id', memberIds)
+    : { data: [] }
 
   type LegStats = { support: number; oppose: number; neutral: number; watching: number; comments: number }
   const byLeg = new Map<string, LegStats>()

@@ -226,18 +226,25 @@ export default async function CouncilMemberPage({
   let memberOpposeCount = 0
 
   if (allMemberIds.length > 0) {
-    const { data: allSponsorships } = await supabase
-      .from('sponsorships')
-      .select('legislator_id, legislation_id')
-      .in('legislator_id', allMemberIds)
+    // Fetch stances first (small table), then only query sponsorships for engaged legislation.
+    // The old approach (members → all sponsorships → stances) hit Supabase's 1000-row default
+    // limit on sponsorships (47k+ rows), silently truncating results.
+    const [{ data: stanceRows }, { data: commentRows }] = await Promise.all([
+      supabase.from('user_stances').select('legislation_id, stance'),
+      supabase.from('comments').select('legislation_id').eq('is_hidden', false),
+    ])
 
-    const allLegIds = [...new Set((allSponsorships ?? []).map((s) => s.legislation_id))]
+    const engagedLegIds = [...new Set([
+      ...(stanceRows ?? []).map((s) => s.legislation_id),
+      ...(commentRows ?? []).map((c) => c.legislation_id),
+    ])]
 
-    if (allLegIds.length > 0) {
-      const [{ data: stanceRows }, { data: commentRows }] = await Promise.all([
-        supabase.from('user_stances').select('legislation_id, stance').in('legislation_id', allLegIds),
-        supabase.from('comments').select('legislation_id').eq('is_hidden', false).in('legislation_id', allLegIds),
-      ])
+    if (engagedLegIds.length > 0) {
+      const { data: allSponsorships } = await supabase
+        .from('sponsorships')
+        .select('legislator_id, legislation_id')
+        .in('legislation_id', engagedLegIds)
+        .in('legislator_id', allMemberIds)
 
       type LegStats = { support: number; oppose: number; neutral: number; watching: number; comments: number }
       const byLeg = new Map<string, LegStats>()
