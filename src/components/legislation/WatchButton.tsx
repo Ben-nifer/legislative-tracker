@@ -21,7 +21,7 @@ export default function WatchButton({
     return (
       <Link
         href="/login"
-        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-sm text-slate-300 transition-colors hover:border-slate-600 hover:text-slate-100"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-500/40 px-3 py-1.5 text-sm text-indigo-300 transition-colors hover:border-indigo-500 hover:bg-indigo-500/10"
       >
         <Bell size={14} />
         Follow
@@ -48,7 +48,7 @@ export default function WatchButton({
         'inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors',
         following
           ? 'border-indigo-500/50 bg-indigo-500/10 text-indigo-300 hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-300'
-          : 'border-slate-700 bg-slate-800 text-slate-300 hover:border-slate-600 hover:text-slate-100',
+          : 'border-indigo-500/40 text-indigo-300 hover:border-indigo-500 hover:bg-indigo-500/10',
         isPending ? 'opacity-50 cursor-wait' : '',
       ].join(' ')}
     >

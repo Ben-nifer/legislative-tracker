@@ -252,7 +252,7 @@ export default async function HomePage() {
     : null
   const firstName = profileData?.display_name
     ? profileData.display_name.trim().split(/\s+/)[0]
-    : (profileData?.username ?? 'there')
+    : (profileData?.username ?? user?.email?.split('@')[0] ?? 'there')
 
   return (
     <main className="min-h-screen bg-nyc-bg">

@@ -155,13 +155,19 @@ export async function generateSummariesBatch(): Promise<{
 
   const topicsList = topics.map((t) => ({ name: t.name, slug: t.slug }))
 
-  // Process all 25 concurrently
-  const results = await Promise.all(
-    batch.map((item) =>
-      summarizeLegislation(item.title, null, topicsList, item.official_summary)
-        .then((res) => ({ item, ...res }))
+  // Process in small concurrent chunks to avoid rate-limit storms
+  const CONCURRENCY = 5
+  const results = []
+  for (let i = 0; i < batch.length; i += CONCURRENCY) {
+    const chunk = batch.slice(i, i + CONCURRENCY)
+    const chunkResults = await Promise.all(
+      chunk.map((item) =>
+        summarizeLegislation(item.title, null, topicsList, item.official_summary)
+          .then((res) => ({ item, ...res }))
+      )
     )
-  )
+    results.push(...chunkResults)
+  }
 
   for (const { item, summary, shortSummary, topicSlugs, error } of results) {
     if (error && !firstError) firstError = error
@@ -186,10 +192,8 @@ export async function generateSummariesBatch(): Promise<{
 
       processed++
     } else {
-      await supabase
-        .from('legislation')
-        .update({ ai_summary: '' })
-        .eq('id', item.id)
+      // Leave ai_summary as NULL (not '') so it stays eligible for retry
+      console.warn(`[generateSummariesBatch] Failed to summarize ${item.id}: ${error}`)
       failed++
     }
   }

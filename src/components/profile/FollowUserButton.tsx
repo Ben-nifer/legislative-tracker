@@ -38,7 +38,7 @@ export default function FollowUserButton({
         'inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-60',
         following
           ? 'border-indigo-500/50 bg-indigo-500/20 text-indigo-300 hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-300'
-          : 'border-slate-700 text-slate-300 hover:border-indigo-500/50 hover:bg-indigo-500/10 hover:text-indigo-300',
+          : 'border-indigo-500 text-indigo-600 hover:border-indigo-600 hover:bg-indigo-50',
       ].join(' ')}
     >
       {following ? (

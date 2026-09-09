@@ -57,7 +57,7 @@ export default function LegislationFilters({
   return (
     <div className={`space-y-3 transition-opacity ${isPending ? 'opacity-60' : 'opacity-100'}`}>
       {/* Search input */}
-      <div className="relative">
+      <div className="relative w-full max-w-md">
         <Search
           size={15}
           className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-nyc-muted"
