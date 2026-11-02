@@ -1120,7 +1120,8 @@ export default function SyncPage() {
           color="teal"
           onRun={async () => (await runGeocodeUlurpBatch()) as Record<string, unknown> & { remaining?: number; error?: string }}
           formatLog={(res) =>
-            `via BBL ${res.geocodedViaBbl}, via address ${res.geocodedViaAddress}, no match ${res.noMatchFound}, remaining ${res.remaining}`
+            `via BBL ${res.geocodedViaBbl}, via address ${res.geocodedViaAddress}, no match ${res.noMatchFound}, remaining ${res.remaining}` +
+            (res.error ? ` — error: ${res.error}` : '')
           }
         />
 
@@ -1131,7 +1132,10 @@ export default function SyncPage() {
           icon={Sparkles}
           color="indigo"
           onRun={async () => (await generateProposalSummariesBatch()) as Record<string, unknown> & { remaining?: number; error?: string }}
-          formatLog={(res) => `processed ${res.processed}, failed ${res.failed}, remaining ${res.remaining}`}
+          formatLog={(res) =>
+            `processed ${res.processed}, failed ${res.failed}, remaining ${res.remaining}` +
+            (res.error ? ` — error: ${res.error}` : '')
+          }
         />
 
         {/* Step 5: refresh proposal stats */}

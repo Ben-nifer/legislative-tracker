@@ -5,6 +5,7 @@ import { Map as MapIcon, ChevronLeft, ChevronRight } from 'lucide-react'
 import NeighborhoodMap, { type MapProposal } from '@/components/neighborhood/NeighborhoodMap'
 import ProposalCard, { type ProposalCardData } from '@/components/neighborhood/ProposalCard'
 import ProposalFilters from '@/components/neighborhood/ProposalFilters'
+import { COMPLETED_STATUSES_FILTER } from '@/lib/proposals/status'
 
 export const revalidate = 0
 
@@ -14,6 +15,7 @@ type Filters = {
   status?: string
   family?: string
   sort?: string
+  pending?: string
 }
 
 async function getAllProposals(filters: Filters) {
@@ -45,6 +47,7 @@ async function getAllProposals(filters: Filters) {
 
   if (filters.status) query = query.eq('status', filters.status)
   if (filters.family) query = query.eq('proposal_family', filters.family)
+  if (filters.pending === '1') query = query.not('status', 'in', COMPLETED_STATUSES_FILTER)
 
   if (!filters.sort || filters.sort === 'most_engaged') {
     query = query.order('trending_score', { referencedTable: 'proposal_stats', ascending: false, nullsFirst: false })
@@ -70,6 +73,7 @@ function buildPageUrl(filters: Filters, page: number): string {
   if (filters.status) params.set('status', filters.status)
   if (filters.family) params.set('family', filters.family)
   if (filters.sort && filters.sort !== 'most_engaged') params.set('sort', filters.sort)
+  if (filters.pending === '1') params.set('pending', '1')
   if (page > 1) params.set('page', String(page))
   const qs = params.toString()
   return qs ? `?${qs}` : '/neighborhood/citywide'
@@ -78,10 +82,10 @@ function buildPageUrl(filters: Filters, page: number): string {
 export default async function CitywideNeighborhoodPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; family?: string; sort?: string; page?: string }>
+  searchParams: Promise<{ status?: string; family?: string; sort?: string; pending?: string; page?: string }>
 }) {
   const params = await searchParams
-  const filters: Filters = { status: params.status, family: params.family, sort: params.sort }
+  const filters: Filters = { status: params.status, family: params.family, sort: params.sort, pending: params.pending }
   const currentPage = Math.max(1, Number(params.page) || 1)
 
   const supabase = await createServerSupabaseClient()

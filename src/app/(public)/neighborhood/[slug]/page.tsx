@@ -6,6 +6,7 @@ import { MapPin, Map as MapIcon } from 'lucide-react'
 import NeighborhoodMap, { type MapProposal } from '@/components/neighborhood/NeighborhoodMap'
 import ProposalCard, { type ProposalCardData } from '@/components/neighborhood/ProposalCard'
 import ProposalFilters from '@/components/neighborhood/ProposalFilters'
+import { COMPLETED_STATUSES_FILTER } from '@/lib/proposals/status'
 
 export const revalidate = 0
 
@@ -13,6 +14,7 @@ type Filters = {
   status?: string
   family?: string
   sort?: string
+  pending?: string
 }
 
 async function getDistrict(slug: string) {
@@ -55,6 +57,7 @@ async function getProposals(districtSlug: string, filters: Filters) {
 
   if (filters.status) query = query.eq('status', filters.status)
   if (filters.family) query = query.eq('proposal_family', filters.family)
+  if (filters.pending === '1') query = query.not('status', 'in', COMPLETED_STATUSES_FILTER)
 
   if (!filters.sort || filters.sort === 'most_engaged') {
     query = query.order('trending_score', { referencedTable: 'proposal_stats', ascending: false, nullsFirst: false })
@@ -80,7 +83,7 @@ export default async function NeighborhoodPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ status?: string; family?: string; sort?: string }>
+  searchParams: Promise<{ status?: string; family?: string; sort?: string; pending?: string }>
 }) {
   const { slug } = await params
   const filters = await searchParams

@@ -47,7 +47,10 @@ export async function lookupUlurpCentroids(
   if (projectIds.length === 0) return new Map()
 
   const bblRows = await socrataFetch<{ project_id: string; bbl: string }>(ZAP_BBL_URL, {
-    $where: `project_id in(${inList(projectIds)}) AND validated = true`,
+    // `validated` is a text/checkbox field storing the literal string
+    // "true", not a native SoQL boolean — `validated = true` (unquoted) is
+    // a 400 Bad Request, not a zero-match query. Must be quoted.
+    $where: `project_id in(${inList(projectIds)}) AND validated = 'true'`,
     $select: 'project_id,bbl',
     $limit: '5000',
   })

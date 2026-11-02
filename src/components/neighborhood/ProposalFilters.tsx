@@ -17,6 +17,7 @@ export default function ProposalFilters({
   const status = searchParams.get('status') ?? ''
   const family = searchParams.get('family') ?? ''
   const sort = searchParams.get('sort') ?? 'most_engaged'
+  const pendingOnly = searchParams.get('pending') === '1'
 
   const updateParam = useCallback(
     (key: string, value: string) => {
@@ -39,7 +40,7 @@ export default function ProposalFilters({
     })
   }
 
-  const hasFilters = status || family || sort !== 'most_engaged'
+  const hasFilters = status || family || sort !== 'most_engaged' || pendingOnly
 
   const selectClass = 'rounded border border-nyc-border bg-nyc-card px-3 py-2 text-sm text-nyc-blue outline-none transition-colors focus:border-nyc-orange focus:ring-1 focus:ring-nyc-orange'
 
@@ -74,6 +75,23 @@ export default function ProposalFilters({
           <option key={s} value={s}>{s}</option>
         ))}
       </select>
+
+      <label
+        className={[
+          'flex items-center gap-1.5 rounded border px-3 py-2 text-sm cursor-pointer transition-colors',
+          pendingOnly
+            ? 'border-nyc-orange/60 bg-nyc-orange/15 text-nyc-orange'
+            : 'border-nyc-border bg-nyc-card text-nyc-muted hover:border-nyc-border-light',
+        ].join(' ')}
+      >
+        <input
+          type="checkbox"
+          checked={pendingOnly}
+          onChange={(e) => updateParam('pending', e.target.checked ? '1' : '')}
+          className="accent-nyc-orange"
+        />
+        Pending only
+      </label>
 
       {hasFilters && (
         <button
