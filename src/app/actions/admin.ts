@@ -707,26 +707,26 @@ export async function runSyncDotProjects(): Promise<{
 
 /**
  * Upgrades up to 25 ULURP proposals from their district-centroid fallback
- * point to a real geocoded location, by extracting an address from the
- * title/description via Claude and geocoding it with NYC GeoSearch.
+ * point to a real location — primarily via the ZAP-BBL→PLUTO join, falling
+ * back to Claude address extraction + NYC GeoSearch when no BBL matches.
  */
 export async function runGeocodeUlurpBatch(): Promise<{
   processed: number
-  geocoded: number
-  noAddressFound: number
-  geocodeFailed: number
+  geocodedViaBbl: number
+  geocodedViaAddress: number
+  noMatchFound: number
   remaining: number
   error?: string
 }> {
   try {
     await assertAdmin()
   } catch (e) {
-    return { processed: 0, geocoded: 0, noAddressFound: 0, geocodeFailed: 0, remaining: 0, error: String(e) }
+    return { processed: 0, geocodedViaBbl: 0, geocodedViaAddress: 0, noMatchFound: 0, remaining: 0, error: String(e) }
   }
   try {
     return await geocodeUlurpProposalsBatch()
   } catch (e) {
-    return { processed: 0, geocoded: 0, noAddressFound: 0, geocodeFailed: 0, remaining: 0, error: String(e) }
+    return { processed: 0, geocodedViaBbl: 0, geocodedViaAddress: 0, noMatchFound: 0, remaining: 0, error: String(e) }
   }
 }
 

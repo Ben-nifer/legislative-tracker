@@ -31,6 +31,10 @@ export type MapProposal = {
   geometry: GeoJSON.Geometry
 }
 
+// Roughly bounds all five boroughs — used when there's no single district
+// to fit to (citywide view).
+const NYC_BBOX: [number, number, number, number] = [-74.26, 40.49, -73.68, 40.92]
+
 export default function NeighborhoodMap({
   proposals,
   districtGeometry,
@@ -38,8 +42,8 @@ export default function NeighborhoodMap({
   isLoggedIn,
 }: {
   proposals: MapProposal[]
-  districtGeometry: GeoJSON.Geometry
-  districtBbox: [number, number, number, number]
+  districtGeometry?: GeoJSON.Geometry
+  districtBbox?: [number, number, number, number]
   isLoggedIn: boolean
 }) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -49,28 +53,31 @@ export default function NeighborhoodMap({
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
 
+    const bbox = districtBbox ?? NYC_BBOX
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: BASEMAP_STYLE,
       bounds: [
-        [districtBbox[0], districtBbox[1]],
-        [districtBbox[2], districtBbox[3]],
+        [bbox[0], bbox[1]],
+        [bbox[2], bbox[3]],
       ],
       fitBoundsOptions: { padding: 32 },
     })
     mapRef.current = map
 
     map.on('load', () => {
-      map.addSource('district', {
-        type: 'geojson',
-        data: { type: 'Feature', properties: {}, geometry: districtGeometry },
-      })
-      map.addLayer({
-        id: 'district-outline',
-        type: 'line',
-        source: 'district',
-        paint: { 'line-color': '#003DA5', 'line-width': 2, 'line-dasharray': [2, 2] },
-      })
+      if (districtGeometry) {
+        map.addSource('district', {
+          type: 'geojson',
+          data: { type: 'Feature', properties: {}, geometry: districtGeometry },
+        })
+        map.addLayer({
+          id: 'district-outline',
+          type: 'line',
+          source: 'district',
+          paint: { 'line-color': '#003DA5', 'line-width': 2, 'line-dasharray': [2, 2] },
+        })
+      }
 
       const features: GeoJSON.Feature[] = proposals.map((p) => ({
         type: 'Feature',

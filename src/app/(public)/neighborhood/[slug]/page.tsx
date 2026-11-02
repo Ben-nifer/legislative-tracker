@@ -1,7 +1,8 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import { Suspense } from 'react'
-import { MapPin } from 'lucide-react'
+import Link from 'next/link'
+import { MapPin, Map as MapIcon } from 'lucide-react'
 import NeighborhoodMap, { type MapProposal } from '@/components/neighborhood/NeighborhoodMap'
 import ProposalCard, { type ProposalCardData } from '@/components/neighborhood/ProposalCard'
 import ProposalFilters from '@/components/neighborhood/ProposalFilters'
@@ -132,16 +133,24 @@ export default async function NeighborhoodPage({
   return (
     <main className="flex h-screen flex-col bg-nyc-bg">
       <div className="border-b border-nyc-border bg-nyc-blue px-4 py-4 sm:px-6">
-        <div className="flex items-center gap-3">
-          <MapPin className="text-nyc-orange" size={24} />
-          <div>
-            <h1 className="text-lg font-black uppercase tracking-widest text-white">
-              {district.name}
-            </h1>
-            <p className="text-xs text-nyc-muted">
-              {rows.length} local proposal{rows.length === 1 ? '' : 's'} · ULURP housing/rezoning & DOT street/capital projects
-            </p>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <MapPin className="text-nyc-orange" size={24} />
+            <div>
+              <h1 className="text-lg font-black uppercase tracking-widest text-white">
+                {district.name}
+              </h1>
+              <p className="text-xs text-nyc-muted">
+                {rows.length} local proposal{rows.length === 1 ? '' : 's'} · ULURP housing/rezoning & DOT street/capital projects
+              </p>
+            </div>
           </div>
+          <Link
+            href="/neighborhood/citywide"
+            className="shrink-0 flex items-center gap-1.5 rounded border border-white/20 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-white/10"
+          >
+            <MapIcon size={13} /> Citywide view
+          </Link>
         </div>
       </div>
 

@@ -1115,12 +1115,12 @@ export default function SyncPage() {
         {/* Step 3.5: geocode ULURP proposals off their district-centroid fallback */}
         <AutoRunBatchCard
           title="Geocode ULURP Proposals"
-          description="Extracts a street address from each ULURP proposal's title/description via Claude and geocodes it with NYC GeoSearch, upgrading it from the district-centroid placeholder to its real location. &quot;Run all&quot; keeps going until every proposal is processed."
+          description="Joins each ULURP proposal's tax lots (ZAP-BBL dataset) to PLUTO for a real lat/long, falling back to Claude address extraction + NYC GeoSearch when no BBL match exists. Upgrades it from the district-centroid placeholder to its real location. &quot;Run all&quot; keeps going until every proposal is processed."
           icon={MapPin}
           color="teal"
           onRun={async () => (await runGeocodeUlurpBatch()) as Record<string, unknown> & { remaining?: number; error?: string }}
           formatLog={(res) =>
-            `geocoded ${res.geocoded}, no address ${res.noAddressFound}, failed ${res.geocodeFailed}, remaining ${res.remaining}`
+            `via BBL ${res.geocodedViaBbl}, via address ${res.geocodedViaAddress}, no match ${res.noMatchFound}, remaining ${res.remaining}`
           }
         />
 

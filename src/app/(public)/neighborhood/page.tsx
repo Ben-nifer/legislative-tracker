@@ -1,4 +1,5 @@
-import { MapPin } from 'lucide-react'
+import { MapPin, Map as MapIcon } from 'lucide-react'
+import Link from 'next/link'
 import NeighborhoodLookup from '@/components/neighborhood/NeighborhoodLookup'
 
 export const metadata = {
@@ -20,6 +21,12 @@ export default function NeighborhoodIndexPage() {
       <div className="w-full max-w-xl">
         <NeighborhoodLookup />
       </div>
+      <Link
+        href="/neighborhood/citywide"
+        className="mt-6 flex items-center gap-1.5 text-sm text-nyc-muted-light transition-colors hover:text-white"
+      >
+        <MapIcon size={14} /> Or browse the full citywide map
+      </Link>
     </main>
   )
 }
