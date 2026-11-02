@@ -30,9 +30,14 @@ async function socrataFetch<T>(baseUrl: string, params: Record<string, string>):
   throw new Error(`Socrata fetch failed after 3 attempts: ${String(cause)}`)
 }
 
-// Socrata `in(...)` clause value list, single-quoted and escaped.
-function inList(values: string[]): string {
-  return values.map((v) => `'${v.replace(/'/g, "''")}'`).join(',')
+// Socrata `in(...)` clause value list, single-quoted and escaped. Filters
+// out null/undefined/empty entries — the source datasets occasionally have
+// rows with a missing bbl or project_id, which would otherwise crash here.
+function inList(values: (string | null | undefined)[]): string {
+  return values
+    .filter((v): v is string => !!v)
+    .map((v) => `'${v.replace(/'/g, "''")}'`)
+    .join(',')
 }
 
 /**
@@ -44,13 +49,14 @@ function inList(values: string[]): string {
 export async function lookupUlurpCentroids(
   projectIds: string[]
 ): Promise<Map<string, [number, number]>> {
-  if (projectIds.length === 0) return new Map()
+  const projectIdList = inList(projectIds)
+  if (!projectIdList) return new Map()
 
   const bblRows = await socrataFetch<{ project_id: string; bbl: string }>(ZAP_BBL_URL, {
     // `validated` is a text/checkbox field storing the literal string
     // "true", not a native SoQL boolean — `validated = true` (unquoted) is
     // a 400 Bad Request, not a zero-match query. Must be quoted.
-    $where: `project_id in(${inList(projectIds)}) AND validated = 'true'`,
+    $where: `project_id in(${projectIdList}) AND validated = 'true'`,
     $select: 'project_id,bbl',
     $limit: '5000',
   })
@@ -58,16 +64,18 @@ export async function lookupUlurpCentroids(
   const bblsByProject = new Map<string, string[]>()
   const allBbls = new Set<string>()
   for (const row of bblRows) {
+    if (!row.project_id || !row.bbl) continue
     const list = bblsByProject.get(row.project_id) ?? []
     list.push(row.bbl)
     bblsByProject.set(row.project_id, list)
     allBbls.add(row.bbl)
   }
 
-  if (allBbls.size === 0) return new Map()
+  const bblList = inList([...allBbls])
+  if (!bblList) return new Map()
 
   const plutoRows = await socrataFetch<{ bbl: string; latitude: string; longitude: string }>(PLUTO_URL, {
-    $where: `bbl in(${inList([...allBbls])})`,
+    $where: `bbl in(${bblList})`,
     $select: 'bbl,latitude,longitude',
     $limit: '5000',
   })
