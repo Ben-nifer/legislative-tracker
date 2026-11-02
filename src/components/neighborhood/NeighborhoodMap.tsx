@@ -8,6 +8,17 @@ import ProposalSidePanel from './ProposalSidePanel'
 // CARTO's free vector basemap — no API key or billing required.
 const BASEMAP_STYLE = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json'
 
+// MapLibre resolves its web worker relative to its own bundled module URL
+// by default, which Turbopack doesn't produce a loadable asset for —
+// "Worker failed to load" with a blank map. Point it at the matching
+// published worker bundle instead (same npm version, so no API/behavior
+// drift risk).
+if (typeof window !== 'undefined') {
+  maplibregl.setWorkerUrl(
+    `https://cdn.jsdelivr.net/npm/maplibre-gl@${maplibregl.getVersion()}/dist/maplibre-gl-worker.mjs`
+  )
+}
+
 export type MapProposal = {
   id: string
   slug: string
