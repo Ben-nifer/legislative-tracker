@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { RefreshCw, Sparkles, BarChart2, Tag, Users, FileText, MapPin, Map, Construction } from 'lucide-react'
-import { generateSummariesBatch, generateShortSummaries, seedTopics, runSyncSponsorships, runSyncHistories, runSyncEvents, runSyncCouncilMembers, runSyncCommitteeMemberships, runScrapeDistrictData, runSyncCommunityBoards, runSyncLegislation, runRefreshStats, debugSponsorSync, forceSyncSingleBill, forceSyncSingleBillHistory, runSyncCommunityDistricts, runSyncUlurp, runSyncDotProjects, generateProposalSummariesBatch, runRefreshProposalStats } from '@/app/actions/admin'
+import { generateSummariesBatch, generateShortSummaries, seedTopics, runSyncSponsorships, runSyncHistories, runSyncEvents, runSyncCouncilMembers, runSyncCommitteeMemberships, runScrapeDistrictData, runSyncCommunityBoards, runSyncLegislation, runRefreshStats, debugSponsorSync, forceSyncSingleBill, forceSyncSingleBillHistory, runSyncCommunityDistricts, runSyncUlurp, runSyncDotProjects, generateProposalSummariesBatch, runRefreshProposalStats, runGeocodeUlurpBatch } from '@/app/actions/admin'
 
 function CouncilSyncCard() {
   const [state, setState] = useState<JobState>('idle')
@@ -989,6 +989,18 @@ export default function SyncPage() {
           color="orange"
           onRun={async () => {
             const res = await runSyncDotProjects()
+            return res as Record<string, unknown>
+          }}
+        />
+
+        {/* Step 3.5: geocode ULURP proposals off their district-centroid fallback */}
+        <JobCard
+          title="Geocode ULURP Proposals"
+          description="Extracts a street address from each ULURP proposal's title/description via Claude and geocodes it with NYC GeoSearch, upgrading it from the district-centroid placeholder to its real location. 25 at a time — click repeatedly until remaining is 0."
+          icon={MapPin}
+          color="teal"
+          onRun={async () => {
+            const res = await runGeocodeUlurpBatch()
             return res as Record<string, unknown>
           }}
         />

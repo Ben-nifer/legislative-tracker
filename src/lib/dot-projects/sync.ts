@@ -118,6 +118,7 @@ export async function syncDotCapitalProjects(): Promise<{
           source_url: null,
           filed_date: null,
           last_action_date: p.constructi ? `${p.constructi}-01-01` : null,
+          geometry_precise: true,
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'source,source_id' }

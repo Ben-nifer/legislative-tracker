@@ -61,6 +61,18 @@ export async function syncUlurpProposals(): Promise<{
 
   const districtByBoroCd = new Map((districtRows ?? []).map((d) => [d.boro_cd, d]))
 
+  // Proposals already upgraded from the centroid fallback to a real geocoded
+  // point (via the admin "Geocode ULURP Proposals" job) must keep that
+  // location on re-sync — otherwise this daily cron would silently revert
+  // every geocoded proposal back to its district centroid each night.
+  const { data: preciseRows } = await supabase
+    .from('local_proposals')
+    .select('source_id, geometry_type, geometry, bbox')
+    .eq('source', 'zap_ulurp')
+    .eq('geometry_precise', true)
+
+  const preciseBySourceId = new Map((preciseRows ?? []).map((r) => [r.source_id, r]))
+
   let synced = 0
   let skippedNoDistrict = 0
 
@@ -86,6 +98,20 @@ export async function syncUlurpProposals(): Promise<{
       parseDate(p.certified_referred) ??
       parseDate(p.app_filed_date)
 
+    const precise = preciseBySourceId.get(p.project_id)
+
+    // Geometry columns are NOT NULL, so a Postgres upsert needs a value for
+    // them regardless of whether it resolves to an insert or an update —
+    // re-supply the existing geocoded point for already-precise proposals
+    // instead of the fallback centroid, so re-syncing doesn't revert them.
+    const geometryFields = precise
+      ? { geometry_type: precise.geometry_type, geometry: precise.geometry, bbox: precise.bbox }
+      : {
+          geometry_type: 'point' as const,
+          geometry: { type: 'Point' as const, coordinates: centroid },
+          bbox: [centroid[0], centroid[1], centroid[0], centroid[1]],
+        }
+
     const { data: proposal, error } = await supabase
       .from('local_proposals')
       .upsert(
@@ -94,9 +120,6 @@ export async function syncUlurpProposals(): Promise<{
           source_id: p.project_id,
           proposal_family: 'ulurp',
           proposal_type: classifyProposalType(p),
-          geometry_type: 'point',
-          geometry: { type: 'Point', coordinates: centroid },
-          bbox: [centroid[0], centroid[1], centroid[0], centroid[1]],
           community_districts: [district.slug],
           title,
           description: p.project_brief?.trim() || null,
@@ -108,6 +131,7 @@ export async function syncUlurpProposals(): Promise<{
           filed_date: parseDate(p.app_filed_date),
           last_action_date: lastActionDate,
           updated_at: new Date().toISOString(),
+          ...geometryFields,
         },
         { onConflict: 'source,source_id' }
       )

@@ -9,6 +9,7 @@ import { scrapeAndSyncDistrictData } from '@/lib/council/scrape-districts'
 import { syncCommunityBoardsFromOpenData } from '@/lib/council/sync-community-boards'
 import { syncCommunityDistricts } from '@/lib/geo/community-districts'
 import { syncUlurpProposals } from '@/lib/ulurp/sync'
+import { geocodeUlurpProposalsBatch } from '@/lib/ulurp/geocode'
 import { syncDotCapitalProjects } from '@/lib/dot-projects/sync'
 import { generateProposalSummary } from '@/lib/ai/summarize-proposal'
 
@@ -701,6 +702,31 @@ export async function runSyncDotProjects(): Promise<{
     return await syncDotCapitalProjects()
   } catch (e) {
     return { fetched: 0, synced: 0, skippedNoGeometry: 0, errors: [], error: String(e) }
+  }
+}
+
+/**
+ * Upgrades up to 25 ULURP proposals from their district-centroid fallback
+ * point to a real geocoded location, by extracting an address from the
+ * title/description via Claude and geocoding it with NYC GeoSearch.
+ */
+export async function runGeocodeUlurpBatch(): Promise<{
+  processed: number
+  geocoded: number
+  noAddressFound: number
+  geocodeFailed: number
+  remaining: number
+  error?: string
+}> {
+  try {
+    await assertAdmin()
+  } catch (e) {
+    return { processed: 0, geocoded: 0, noAddressFound: 0, geocodeFailed: 0, remaining: 0, error: String(e) }
+  }
+  try {
+    return await geocodeUlurpProposalsBatch()
+  } catch (e) {
+    return { processed: 0, geocoded: 0, noAddressFound: 0, geocodeFailed: 0, remaining: 0, error: String(e) }
   }
 }
 
