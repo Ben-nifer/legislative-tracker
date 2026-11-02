@@ -12,11 +12,26 @@ async function zapFetchPage(limit: number, offset: number, whereClause: string):
     url.searchParams.set('$$app_token', process.env.NYC_OPEN_DATA_APP_TOKEN)
   }
 
-  const response = await fetch(url.toString(), { next: { revalidate: 0 } })
-  if (!response.ok) {
-    throw new Error(`ZAP API ${response.status}`)
+  let lastError: unknown
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const response = await fetch(url.toString(), {
+        next: { revalidate: 0 },
+        headers: { 'User-Agent': 'legislative-tracker/1.0' },
+        signal: AbortSignal.timeout(20000),
+      })
+      if (!response.ok) {
+        throw new Error(`ZAP API ${response.status}`)
+      }
+      return response.json()
+    } catch (e) {
+      lastError = e
+      if (attempt < 3) await new Promise((r) => setTimeout(r, 1000 * attempt))
+    }
   }
-  return response.json()
+
+  const cause = lastError instanceof Error ? (lastError.cause ?? lastError.message) : lastError
+  throw new Error(`ZAP API fetch failed after 3 attempts: ${String(cause)}`)
 }
 
 // Only pull projects with a community district (required for map scoping)

@@ -11,11 +11,26 @@ async function fetchPage(limit: number, offset: number, whereClause: string): Pr
     url.searchParams.set('$$app_token', process.env.NYC_OPEN_DATA_APP_TOKEN)
   }
 
-  const response = await fetch(url.toString(), { next: { revalidate: 0 } })
-  if (!response.ok) {
-    throw new Error(`DOT capital projects API ${response.status}`)
+  let lastError: unknown
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const response = await fetch(url.toString(), {
+        next: { revalidate: 0 },
+        headers: { 'User-Agent': 'legislative-tracker/1.0' },
+        signal: AbortSignal.timeout(20000),
+      })
+      if (!response.ok) {
+        throw new Error(`DOT capital projects API ${response.status}`)
+      }
+      return response.json()
+    } catch (e) {
+      lastError = e
+      if (attempt < 3) await new Promise((r) => setTimeout(r, 1000 * attempt))
+    }
   }
-  return response.json()
+
+  const cause = lastError instanceof Error ? (lastError.cause ?? lastError.message) : lastError
+  throw new Error(`DOT capital projects API fetch failed after 3 attempts: ${String(cause)}`)
 }
 
 // Lexical comparison on a 4-digit-year text column — sorts correctly for
