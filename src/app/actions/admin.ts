@@ -7,6 +7,10 @@ import { syncSponsorships, syncCouncilMembers, syncCommitteeMemberships, syncHis
 import { legistar } from '@/lib/legistar/client'
 import { scrapeAndSyncDistrictData } from '@/lib/council/scrape-districts'
 import { syncCommunityBoardsFromOpenData } from '@/lib/council/sync-community-boards'
+import { syncCommunityDistricts } from '@/lib/geo/community-districts'
+import { syncUlurpProposals } from '@/lib/ulurp/sync'
+import { syncDotCapitalProjects } from '@/lib/dot-projects/sync'
+import { generateProposalSummary } from '@/lib/ai/summarize-proposal'
 
 // Predefined topics for NYC Council legislation
 const PREDEFINED_TOPICS = [
@@ -620,6 +624,161 @@ export async function runRefreshStats(): Promise<{
   try {
     const supabase = createServiceClient()
     const { error } = await supabase.rpc('refresh_legislation_stats')
+    if (error) return { error: error.message }
+    return { refreshed_at: new Date().toISOString() }
+  } catch (e) {
+    return { error: String(e) }
+  }
+}
+
+// ── Neighborhood map (V2 Phase 1) ────────────────────────────────────────────
+
+/**
+ * Seeds/refreshes community district boundary geometry from the NYC
+ * Community Districts ArcGIS FeatureServer. One-off — run once, or again
+ * only if boundaries change.
+ */
+export async function runSyncCommunityDistricts(): Promise<{
+  synced: number
+  skipped: number
+  errors: string[]
+  error?: string
+}> {
+  try {
+    await assertAdmin()
+  } catch (e) {
+    return { synced: 0, skipped: 0, errors: [], error: String(e) }
+  }
+  try {
+    return await syncCommunityDistricts()
+  } catch (e) {
+    return { synced: 0, skipped: 0, errors: [], error: String(e) }
+  }
+}
+
+/**
+ * Pulls ULURP housing/rezoning proposals from NYC Open Data (ZAP) and
+ * upserts them into local_proposals. Requires community_districts to be
+ * seeded first.
+ */
+export async function runSyncUlurp(): Promise<{
+  fetched: number
+  synced: number
+  skippedNoDistrict: number
+  errors: string[]
+  error?: string
+}> {
+  try {
+    await assertAdmin()
+  } catch (e) {
+    return { fetched: 0, synced: 0, skippedNoDistrict: 0, errors: [], error: String(e) }
+  }
+  try {
+    return await syncUlurpProposals()
+  } catch (e) {
+    return { fetched: 0, synced: 0, skippedNoDistrict: 0, errors: [], error: String(e) }
+  }
+}
+
+/**
+ * Pulls DOT/capital-construction street projects from NYC Open Data and
+ * upserts them into local_proposals. Requires community_districts to be
+ * seeded first.
+ */
+export async function runSyncDotProjects(): Promise<{
+  fetched: number
+  synced: number
+  skippedNoGeometry: number
+  errors: string[]
+  error?: string
+}> {
+  try {
+    await assertAdmin()
+  } catch (e) {
+    return { fetched: 0, synced: 0, skippedNoGeometry: 0, errors: [], error: String(e) }
+  }
+  try {
+    return await syncDotCapitalProjects()
+  } catch (e) {
+    return { fetched: 0, synced: 0, skippedNoGeometry: 0, errors: [], error: String(e) }
+  }
+}
+
+/**
+ * Generates AI summaries for local_proposals that don't have one yet,
+ * 25 at a time — mirrors generateSummariesBatch() for legislation.
+ */
+export async function generateProposalSummariesBatch(): Promise<{
+  processed: number
+  failed: number
+  remaining: number
+  error?: string
+}> {
+  try {
+    await assertAdmin()
+  } catch (e) {
+    return { processed: 0, failed: 0, remaining: 0, error: String(e) }
+  }
+
+  const supabase = createServiceClient()
+
+  const { data: batch, error } = await supabase
+    .from('local_proposals')
+    .select('id, title, description, proposal_family')
+    .is('ai_summary', null)
+    .order('last_action_date', { ascending: false })
+    .limit(25)
+
+  if (error) return { processed: 0, failed: 0, remaining: 0, error: error.message }
+  if (!batch || batch.length === 0) return { processed: 0, failed: 0, remaining: 0 }
+
+  let processed = 0
+  let failed = 0
+  let firstError: string | undefined
+
+  const CONCURRENCY = 5
+  const results = []
+  for (let i = 0; i < batch.length; i += CONCURRENCY) {
+    const chunk = batch.slice(i, i + CONCURRENCY)
+    const chunkResults = await Promise.all(
+      chunk.map((item) =>
+        generateProposalSummary(item.title, item.description, item.proposal_family as 'ulurp' | 'dot')
+          .then((res) => ({ item, ...res }))
+      )
+    )
+    results.push(...chunkResults)
+  }
+
+  for (const { item, summary, error: summarizeError } of results) {
+    if (summarizeError && !firstError) firstError = summarizeError
+    if (summary) {
+      await supabase.from('local_proposals').update({ ai_summary: summary }).eq('id', item.id)
+      processed++
+    } else {
+      failed++
+    }
+  }
+
+  const { count: remaining } = await supabase
+    .from('local_proposals')
+    .select('*', { count: 'exact', head: true })
+    .is('ai_summary', null)
+
+  return { processed, failed, remaining: remaining ?? 0, ...(firstError ? { error: firstError } : {}) }
+}
+
+export async function runRefreshProposalStats(): Promise<{
+  refreshed_at?: string
+  error?: string
+}> {
+  try {
+    await assertAdmin()
+  } catch (e) {
+    return { error: String(e) }
+  }
+  try {
+    const supabase = createServiceClient()
+    const { error } = await supabase.rpc('refresh_proposal_stats')
     if (error) return { error: error.message }
     return { refreshed_at: new Date().toISOString() }
   } catch (e) {

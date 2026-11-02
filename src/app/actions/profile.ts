@@ -208,6 +208,60 @@ export async function lookupAddressDistrict(address: string): Promise<{
   }
 }
 
+/**
+ * Resolves an address to a community_districts.slug for the neighborhood
+ * map feature — same GeoSearch → BBL → PLUTO pipeline as
+ * lookupAddressDistrict(), but returns a district slug for routing instead
+ * of a council member.
+ */
+export async function resolveNeighborhoodDistrict(address: string): Promise<{
+  slug?: string
+  name?: string
+  error?: string
+}> {
+  const supabaseForAuth = await createServerSupabaseClient()
+  const { data: { user } } = await supabaseForAuth.auth.getUser()
+  if (user) {
+    const { success } = await geocodeRateLimit.limit(user.id)
+    if (!success) return { error: 'Too many requests. Please try again later.' }
+  }
+
+  try {
+    const geoRes = await fetch(
+      `https://geosearch.planninglabs.nyc/v2/search?text=${encodeURIComponent(address)}&size=1`,
+      { signal: AbortSignal.timeout(8000) }
+    )
+    if (!geoRes.ok) return { error: 'Address lookup failed. Try a more specific address.' }
+
+    const geoData = await geoRes.json()
+    const bbl = geoData?.features?.[0]?.properties?.addendum?.pad?.bbl
+    if (!bbl) return { error: 'Address not found in NYC. Please check the address and try again.' }
+
+    const plutoRes = await fetch(
+      `https://data.cityofnewyork.us/resource/64uk-42ks.json?bbl=${bbl}&$select=cd`,
+      { signal: AbortSignal.timeout(8000) }
+    )
+    if (!plutoRes.ok) return { error: 'Could not look up district information. Please try again.' }
+
+    const plutoData = await plutoRes.json()
+    const cd = plutoData?.[0]?.cd ? String(plutoData[0].cd).padStart(3, '0') : null
+    if (!cd) return { error: 'Could not determine your community district. Try a more specific address.' }
+
+    const supabase = await createServerSupabaseClient()
+    const { data: district } = await supabase
+      .from('community_districts')
+      .select('slug, name')
+      .eq('boro_cd', cd)
+      .maybeSingle()
+
+    if (!district) return { error: 'No neighborhood data found for your district yet.' }
+
+    return { slug: district.slug, name: district.name }
+  } catch {
+    return { error: 'Address not found. Please check the address and try again.' }
+  }
+}
+
 export async function saveCouncilMember(
   legislatorId: string,
   communityBoard: string | null

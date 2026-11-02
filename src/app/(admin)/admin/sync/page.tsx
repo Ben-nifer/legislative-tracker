@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { RefreshCw, Sparkles, BarChart2, Tag, Users, FileText, MapPin } from 'lucide-react'
-import { generateSummariesBatch, generateShortSummaries, seedTopics, runSyncSponsorships, runSyncHistories, runSyncEvents, runSyncCouncilMembers, runSyncCommitteeMemberships, runScrapeDistrictData, runSyncCommunityBoards, runSyncLegislation, runRefreshStats, debugSponsorSync, forceSyncSingleBill, forceSyncSingleBillHistory } from '@/app/actions/admin'
+import { RefreshCw, Sparkles, BarChart2, Tag, Users, FileText, MapPin, Map, Construction } from 'lucide-react'
+import { generateSummariesBatch, generateShortSummaries, seedTopics, runSyncSponsorships, runSyncHistories, runSyncEvents, runSyncCouncilMembers, runSyncCommitteeMemberships, runScrapeDistrictData, runSyncCommunityBoards, runSyncLegislation, runRefreshStats, debugSponsorSync, forceSyncSingleBill, forceSyncSingleBillHistory, runSyncCommunityDistricts, runSyncUlurp, runSyncDotProjects, generateProposalSummariesBatch, runRefreshProposalStats } from '@/app/actions/admin'
 
 function CouncilSyncCard() {
   const [state, setState] = useState<JobState>('idle')
@@ -954,6 +954,68 @@ export default function SyncPage() {
 
         {/* Generate short summaries for cards */}
         <ShortSummariesCard />
+
+        <h2 className="pt-4 text-lg font-bold text-white">Neighborhood Map (V2 Phase 1)</h2>
+
+        {/* Step 1: seed district boundaries — run once */}
+        <JobCard
+          title="Sync Community Districts"
+          description="Seeds community district boundary polygons from the NYC Community Districts ArcGIS FeatureServer. Run this once before syncing ULURP/DOT proposals — they're scoped to these districts."
+          icon={Map}
+          color="teal"
+          onRun={async () => {
+            const res = await runSyncCommunityDistricts()
+            return res as Record<string, unknown>
+          }}
+        />
+
+        {/* Step 2: ULURP proposals */}
+        <JobCard
+          title="Sync ULURP Proposals"
+          description="Pulls housing/rezoning land-use applications from NYC Open Data (ZAP) into local_proposals. Also runs automatically once a day."
+          icon={MapPin}
+          color="orange"
+          onRun={async () => {
+            const res = await runSyncUlurp()
+            return res as Record<string, unknown>
+          }}
+        />
+
+        {/* Step 3: DOT / capital projects */}
+        <JobCard
+          title="Sync DOT Capital Projects"
+          description="Pulls street redesign and capital construction projects from NYC Open Data into local_proposals. Also runs automatically once a day."
+          icon={Construction}
+          color="orange"
+          onRun={async () => {
+            const res = await runSyncDotProjects()
+            return res as Record<string, unknown>
+          }}
+        />
+
+        {/* Step 4: AI summaries for proposals */}
+        <JobCard
+          title="Generate Proposal Summaries"
+          description="Generates plain-language AI summaries for local_proposals that don't have one yet, 25 at a time. Also runs automatically every 2 hours."
+          icon={Sparkles}
+          color="indigo"
+          onRun={async () => {
+            const res = await generateProposalSummariesBatch()
+            return res as Record<string, unknown>
+          }}
+        />
+
+        {/* Step 5: refresh proposal stats */}
+        <JobCard
+          title="Refresh Proposal Stats"
+          description="Recalculates proposal trending scores and engagement counts. Also runs automatically every 15 minutes alongside legislation stats."
+          icon={BarChart2}
+          color="emerald"
+          onRun={async () => {
+            const res = await runRefreshProposalStats()
+            return res as Record<string, unknown>
+          }}
+        />
       </div>
 
       <p className="text-xs text-slate-600">

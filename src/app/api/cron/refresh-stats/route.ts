@@ -12,8 +12,10 @@ export async function GET(request: Request) {
   try {
     const supabase = createServiceClient()
     const { error } = await supabase.rpc('refresh_legislation_stats')
-
     if (error) throw error
+
+    const { error: proposalError } = await supabase.rpc('refresh_proposal_stats')
+    if (proposalError) throw proposalError
 
     return NextResponse.json({
       success: true,
