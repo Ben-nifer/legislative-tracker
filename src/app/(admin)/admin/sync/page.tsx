@@ -585,6 +585,125 @@ function JobCard({
   )
 }
 
+// Generic auto-looping batch job card — "Run once" does a single batch,
+// "Run all" keeps calling onRun until it reports remaining: 0 or Stop is
+// clicked. Mirrors SummariesCard's loop, generalized for reuse.
+function AutoRunBatchCard({
+  title,
+  description,
+  icon: Icon,
+  color,
+  onRun,
+  formatLog,
+}: {
+  title: string
+  description: string
+  icon: React.ElementType
+  color: string
+  onRun: () => Promise<Record<string, unknown> & { remaining?: number; error?: string }>
+  formatLog: (res: Record<string, unknown>) => string
+}) {
+  const [state, setState] = useState<JobState>('idle')
+  const [log, setLog] = useState<string[]>([])
+  const [autoRun, setAutoRun] = useState(false)
+  const autoRunRef = useRef(false)
+
+  async function runOnce(): Promise<number> {
+    const res = await onRun()
+    setLog((prev) => [
+      `${res.error ? '✗' : '✓'} ${formatLog(res)}`,
+      ...prev.slice(0, 19),
+    ])
+    return res.remaining ?? 0
+  }
+
+  async function handleRunOnce() {
+    setState('running')
+    await runOnce()
+    setState('done')
+  }
+
+  async function runAll() {
+    setState('running')
+    setLog([])
+    autoRunRef.current = true
+    setAutoRun(true)
+    try {
+      let remaining = Infinity
+      while (autoRunRef.current && remaining > 0) {
+        remaining = await runOnce()
+      }
+      setState('done')
+    } catch (e) {
+      setLog((prev) => [`✗ error: ${String(e)}`, ...prev])
+      setState('error')
+    }
+    setAutoRun(false)
+  }
+
+  function stop() {
+    autoRunRef.current = false
+  }
+
+  return (
+    <div className="bg-slate-800/80 border border-slate-700 rounded-xl p-6 space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className={`p-2 rounded-lg bg-${color}-500/10`}>
+            <Icon className={`w-5 h-5 text-${color}-400`} />
+          </div>
+          <div>
+            <h2 className="font-semibold text-white">{title}</h2>
+            <p className="text-sm text-slate-400 mt-0.5">{description}</p>
+          </div>
+        </div>
+        <div className="flex gap-2 shrink-0">
+          {autoRun ? (
+            <button
+              onClick={stop}
+              className="text-sm bg-red-700 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors"
+            >
+              Stop
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={handleRunOnce}
+                disabled={state === 'running'}
+                className="text-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                Run once
+              </button>
+              <button
+                onClick={runAll}
+                disabled={state === 'running'}
+                className={`text-sm bg-${color}-700 hover:bg-${color}-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2`}
+              >
+                Run all
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {autoRun && (
+        <div className={`flex items-center gap-2 text-sm text-${color}-300`}>
+          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+          Running continuously — click Stop to pause
+        </div>
+      )}
+
+      {log.length > 0 && (
+        <div className="text-xs rounded-lg p-3 font-mono bg-slate-900/60 text-slate-300 space-y-1 max-h-48 overflow-y-auto">
+          {log.map((line, i) => (
+            <div key={i}>{line}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function CronJobCard({
   title,
   description,
@@ -994,27 +1113,25 @@ export default function SyncPage() {
         />
 
         {/* Step 3.5: geocode ULURP proposals off their district-centroid fallback */}
-        <JobCard
+        <AutoRunBatchCard
           title="Geocode ULURP Proposals"
-          description="Extracts a street address from each ULURP proposal's title/description via Claude and geocodes it with NYC GeoSearch, upgrading it from the district-centroid placeholder to its real location. 25 at a time — click repeatedly until remaining is 0."
+          description="Extracts a street address from each ULURP proposal's title/description via Claude and geocodes it with NYC GeoSearch, upgrading it from the district-centroid placeholder to its real location. &quot;Run all&quot; keeps going until every proposal is processed."
           icon={MapPin}
           color="teal"
-          onRun={async () => {
-            const res = await runGeocodeUlurpBatch()
-            return res as Record<string, unknown>
-          }}
+          onRun={async () => (await runGeocodeUlurpBatch()) as Record<string, unknown> & { remaining?: number; error?: string }}
+          formatLog={(res) =>
+            `geocoded ${res.geocoded}, no address ${res.noAddressFound}, failed ${res.geocodeFailed}, remaining ${res.remaining}`
+          }
         />
 
         {/* Step 4: AI summaries for proposals */}
-        <JobCard
+        <AutoRunBatchCard
           title="Generate Proposal Summaries"
-          description="Generates plain-language AI summaries for local_proposals that don't have one yet, 25 at a time. Also runs automatically every 2 hours."
+          description="Generates plain-language AI summaries for local_proposals that don't have one yet. Also runs automatically every day; &quot;Run all&quot; here catches up immediately."
           icon={Sparkles}
           color="indigo"
-          onRun={async () => {
-            const res = await generateProposalSummariesBatch()
-            return res as Record<string, unknown>
-          }}
+          onRun={async () => (await generateProposalSummariesBatch()) as Record<string, unknown> & { remaining?: number; error?: string }}
+          formatLog={(res) => `processed ${res.processed}, failed ${res.failed}, remaining ${res.remaining}`}
         />
 
         {/* Step 5: refresh proposal stats */}
