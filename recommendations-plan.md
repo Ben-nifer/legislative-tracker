@@ -1,0 +1,399 @@
+# Recommendations Plan — Content Layer, Embeddings & Feed Ranking
+
+**Status:** Draft v1.0 · 2026-11-21 · Built from product-owner interview answers.
+**Builds on:** `onboarding-spec.md` v1.1 (§6 live preview, §7 content & ranking).
+**Scope:** The data layer, embeddings pipeline and ranking engine behind the onboarding live preview and the home-feed widgets.
+
+> **[DECIDED]** = product-owner answer from the interview. **[PROPOSED]** = my recommendation, still awaiting approval. **[OPEN]** = unresolved (see §12).
+
+---
+
+## 1. Decisions from the interview
+
+| # | Topic | Decision |
+|---|---|---|
+| D1 | Surfaces in scope | **Onboarding live preview + home feed.** Suggestion cards (spec §9) and search re-ranking come later. **[DECIDED]** |
+| D2 | Ranking approach | **Weighted scoring formula only.** No machine learning planned. **[DECIDED]** |
+| D3 | Content model | **One shared `content_items` table.** Every data source writes to it through an adapter. **[DECIDED]** |
+| D4 | Sources expected within 6 months | NYC Legistar (now), then NY State Legislature, U.S. Congress, NYC neighborhood data (projects, budget, agency announcements), and news. **[DECIDED]** |
+| D5 | Geography | **NYC first.** Other states plug in later through adapters and don't block launch. *Supersedes spec §2 "all 50 states at launch."* **[DECIDED]** |
+| D6 | Embedding provider | **Voyage AI.** **[DECIDED]** |
+| D7 | Ranking signals | Followed jurisdiction/district, followed politician, interest match, timeliness, bill stage, the user's own history, friends' activity. Popularity counts as a **moderate** factor. **[DECIDED]** |
+| D8 | Down-ranking | **Stale / dead bills** only. **[DECIDED]** |
+| D9 | Freshness | **Every 2 hours** (the current Legistar sync cadence). **[DECIDED]** |
+| D10 | Feed layout | A **"Top for you"** strip, then **jurisdiction banners** (Federal → State → City → Neighborhood). **[DECIDED]** |
+| D11 | Balance rule | **Cap per sponsor.** **[DECIDED]** |
+| D12 | Home page | The home page is made of **widgets** (Top for you, banners, Tracked, Trending, Friend activity…). This plan builds the **engine plus a fixed default layout**. The widget customization UI gets its own plan. **[DECIDED]** |
+| D13 | Interest matching | **Keep the existing flat topics.** Free-text interests ("high-speed rail") match **directly against item embeddings**. No curated topic graph or aliases. *Supersedes spec §7.2 items 1, 3a, 3d and 4.* **[DECIDED]** |
+| D14 | Guests | **Personalized, session-based.** The feed is scored from onboarding answers held in the session, and nothing persists until sign-up. **[DECIDED]** |
+
+---
+
+## 2. Architecture overview
+
+```
+ INGEST (cron, every 2h)                 ENRICH (cron)                   SERVE (per request)
+ ───────────────────────                 ─────────────                   ───────────────────
+ Legistar ─┐                                                             UserContext
+ NY State ─┤  adapter.fetchChanged()     content_items                   (account OR guest session)
+ Congress ─┼─► adapter.toContentItem() ─► + places / people / topics ─┐       │
+ Open Data ┤      (upsert by hash)                                    │       ▼
+ News ─────┘                                                          │  1. Candidate generation (SQL)
+                                                                      ├─►2. Feature scoring (formula)
+                    embed cron: items with no / stale vector ─► Voyage │  3. Re-rank (sponsor cap)
+                                    │                                  │  4. Slice into widgets + reasons
+                                    ▼                                  │       │
+                             content_embeddings (pgvector, HNSW) ──────┘       ▼
+                                                                         Onboarding preview / Home widgets
+```
+
+**Core idea:** everything downstream of the adapters (embeddings, ranking, feed) only sees `content_items`. Adding a source means writing one adapter file.
+
+---
+
+## 3. Data model
+
+All new tables live in a single migration: `014_content_layer.sql`. Existing tables (`legislation`, `legislators`, `topics`, `topic_follows`, `legislator_follows`, `user_follows`, `engagement_events`, `legislation_stats`) stay as they are.
+
+### 3.1 Sources & content
+
+**`sources`**: one row per data source.
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `slug` | text unique | `nyc-legistar`, `ny-senate`, `congress-gov`, `nyc-capital-projects`, … |
+| `name`, `kind` | text | `kind`: `legislature` \| `open_data` \| `news` |
+| `enabled` | bool | Kill switch per source |
+| `last_synced_at` | timestamptz | Watermark for incremental fetches |
+| `config` | jsonb | Non-secret settings, e.g. page size |
+
+**`content_items`**: the shared feed unit.
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid PK | |
+| `source_id` | uuid FK | |
+| `external_id` | text | ID in the source system. **Unique with `source_id`** |
+| `item_type` | text | `bill` \| `resolution` \| `hearing` \| `project` \| `budget_item` \| `announcement` \| `news` |
+| `title` | text | |
+| `summary` | text | Best available: `ai_summary` → official summary → null |
+| `url` | text | Link to the original |
+| `jurisdiction_level` | text | `federal` \| `state` \| `city` \| `neighborhood` |
+| `legislature_id` | uuid FK null | Null for non-legislative items |
+| `stage` | text null | Normalized lifecycle stage (see §5.2) |
+| `status_raw` | text | The source's own status string, kept for display |
+| `introduced_at` | date null | |
+| `last_activity_at` | timestamptz | Drives timeliness and staleness |
+| `next_event_at` | timestamptz null | Next hearing or vote |
+| `is_dead` | bool | Filed, withdrawn, or expired at session end |
+| `legislation_id` | uuid FK null | Link back to `legislation` for bill-specific detail |
+| `metadata` | jsonb | Source-specific extras |
+| `content_hash` | text | Hash of `title + summary`. A change triggers re-embedding |
+| `created_at`, `updated_at` | timestamptz | |
+
+Indexes: `(source_id, external_id)` unique; `(jurisdiction_level, last_activity_at desc)`; `(legislature_id, last_activity_at desc)`; partial `where not is_dead`.
+
+**`content_item_places`**: where an item applies. One item can touch many places (spec §7.1 corridor rule).
+| Column | Notes |
+|---|---|
+| `content_item_id`, `place_type`, `place_id` | `place_type`: `city` \| `council_district` \| `neighborhood` (NTA 2020 code) \| `state_senate` \| `assembly` \| `congressional` \| `state` |
+
+**`content_item_people`**: politicians attached to an item.
+| Column | Notes |
+|---|---|
+| `content_item_id`, `legislator_id`, `role` | `role`: `primary_sponsor` \| `sponsor` \| `actor` |
+
+**`content_item_topics`**: the generalized version of `legislation_topics`, using the existing `topics` table.
+
+### 3.2 Embeddings
+
+**`content_embeddings`**
+| Column | Type | Notes |
+|---|---|---|
+| `content_item_id` | uuid FK | |
+| `model` | text | e.g. `voyage-3.5`. **PK is (`content_item_id`, `model`)**, so switching models later means a re-embed, not a schema change |
+| `embedding` | `vector(1024)` | Dimension must match the model. Confirm at build time |
+| `content_hash` | text | Hash of the text that was embedded |
+| `embedded_at` | timestamptz | |
+
+Index: HNSW, `vector_cosine_ops`, on the active model's rows.
+
+**`interest_phrases`**: a cache, so each distinct phrase is embedded only once across all users.
+| Column | Notes |
+|---|---|
+| `normalized_phrase` (PK), `model`, `embedding vector(1024)`, `hit_count`, `created_at` | Normalization: lowercase, trim, collapse whitespace, strip punctuation |
+
+### 3.3 User context
+
+| Table | Purpose |
+|---|---|
+| `user_places` | Resolved districts and neighborhood: `user_id, place_type, place_id`. Raw address is never stored (spec §S1) |
+| `user_jurisdiction_follows` | Followed levels/places: `user_id, place_type, place_id` |
+| `user_interests` | Free-text interests: `user_id, normalized_phrase` (FK → `interest_phrases`), `display_phrase`, `created_at` |
+| *(existing)* `topic_follows` | Chip selections |
+| *(existing)* `legislator_follows`, `user_follows`, `bookmarks`, `user_stances`, `engagement_events` | Politician, friend and history signals |
+
+RLS: users read/write only their own rows. `content_*` tables are public-read and written by the service role only.
+
+### 3.4 Ranking config
+
+**`ranking_config`**: `version` (PK), `weights` jsonb, `params` jsonb, `active` bool, `created_at`. Weights can be tuned without a deploy, and every feed response records which version scored it.
+
+---
+
+## 4. Ingest & adapters
+
+### 4.1 Adapter contract
+
+```ts
+// src/lib/ingest/types.ts
+export interface SourceAdapter<Raw> {
+  slug: string                                   // matches sources.slug
+  fetchChanged(since: Date | null): AsyncIterable<Raw>
+  toContentItem(raw: Raw): NormalizedItem | null // null = skip
+}
+
+export interface NormalizedItem {
+  externalId: string
+  itemType: ItemType
+  title: string
+  summary: string | null
+  url: string
+  jurisdictionLevel: JurisdictionLevel
+  legislatureSlug?: string
+  stage?: Stage
+  statusRaw?: string
+  introducedAt?: string
+  lastActivityAt: string
+  nextEventAt?: string
+  isDead: boolean
+  places: { type: PlaceType; id: string }[]
+  people: { legislatorExternalId: string; role: PersonRole }[]
+  topicSlugs?: string[]
+  metadata?: Record<string, unknown>
+}
+```
+
+A shared runner (`src/lib/ingest/run.ts`) handles everything else for every source: upsert by `(source_id, external_id)`, compute `content_hash`, replace places/people/topics, advance `sources.last_synced_at`. **Adapters never touch the database directly.**
+
+### 4.2 Legistar (first adapter)
+
+- Keep `src/lib/legistar/sync.ts` writing to `legislation` as it does today.
+- Add `src/lib/ingest/adapters/nyc-legistar.ts`. It reads the synced `legislation` rows plus sponsors, history and events, and emits `NormalizedItem`s with `legislation_id` set.
+- Places: every NYC Council bill gets `{city: 'nyc'}`. If the primary sponsor holds a district seat, it also gets `{council_district: N}`.
+- One-time backfill script: `scripts/backfill-content-items.ts`.
+
+### 4.3 Future adapters (not built in this plan)
+
+| Source | Key mapping work |
+|---|---|
+| NY State Legislature | Map chamber → `state_senate` / `assembly` places; normalize stages |
+| U.S. Congress | Map to `congressional` places; normalize stages |
+| NYC neighborhood data | Geo-tag points/lines to NTA 2020 codes (spec §7.1); `item_type` = `project` / `budget_item` / `announcement` |
+| News | Link articles to items or places; `item_type` = `news`; short half-life |
+
+---
+
+## 5. Embeddings pipeline
+
+### 5.1 Item embeddings
+
+- **Cron:** `/api/cron/embed-content`, every 2 hours, offset 30 minutes after the Legistar sync.
+- **Selects:** items with no row for the active model, or whose `content_hash` differs from the stored one.
+- **Text embedded:** `"{item_type}: {title}\n\n{summary}"`, truncated to the model's token limit.
+- **Batching:** batched requests to Voyage, using `input_type: "document"`. Retry with backoff; on failure, leave rows unembedded for the next run.
+- **Re-embed triggers:** a new AI summary arrives (hash change), or a model change.
+- **Backfill:** `scripts/backfill-embeddings.ts`.
+
+### 5.2 Stage normalization
+
+| `stage` | Meaning | Stage score |
+|---|---|---|
+| `introduced` | Just filed | 0.3 |
+| `in_committee` | Referred, no hearing | 0.4 |
+| `hearing_scheduled` | Upcoming hearing | 0.8 |
+| `passed_committee` | Voted out of committee | 0.9 |
+| `passed_chamber` | Passed a full vote | 1.0 |
+| `enacted` / `vetoed` | Final outcome | 0.6 |
+| `dead` | Filed, withdrawn or expired | 0.0, and `is_dead = true` |
+
+Each adapter owns the mapping from its own status strings to these stages.
+
+### 5.3 Free-text interest matching (D13)
+
+1. Normalize the phrase and look it up in `interest_phrases`. **Cache hit = no API call.**
+2. On a miss: make **one** Voyage call with `input_type: "query"`, then store the vector.
+3. Run nearest-neighbor search over `content_embeddings`, **pre-filtered** to the user's jurisdictions and to `not is_dead`.
+4. Items above the similarity floor (§6.2) become candidates and are tagged **"Matches: high-speed rail"**.
+5. The preview shows the top matches as the adjacency feedback described in spec §S4 (e.g. *"high-speed rail → showing 6 bills incl. Amtrak funding"*). Removing an interest removes its matches.
+
+This meets the spec §14 criteria: **chip taps make 0 model calls, and free-text makes at most 1 embedding call and 0 LLM calls.**
+
+---
+
+## 6. Ranking engine
+
+### 6.1 Pipeline
+
+```
+UserContext ─► 1. Candidates (SQL, ≤ ~600 items)
+              2. Features → score = Σ weight × signal, × staleness multiplier
+              3. Re-rank with the sponsor cap
+              4. Slice into widgets, attach reasons, de-duplicate
+```
+
+**`UserContext`** has the same shape for signed-in users (loaded from tables) and guests (sent from session state):
+```ts
+{ places, jurisdictionFollows, legislatorIds, topicIds,
+  interestPhrases, friendIds, historyItemIds, isGuest }
+```
+Guests have no friends or history, so those signals are 0.
+
+**Candidate generation** (one Postgres function, `feed_candidates(ctx jsonb)`): a union of
+| Pool | Limit |
+|---|---|
+| Recent items in followed places/jurisdictions | 300 |
+| Items attached to followed legislators | 100 |
+| Nearest neighbors per interest phrase (pre-filtered) | 50 each |
+| Items tagged with followed topic chips | 100 |
+| Nearest neighbors to the user's history centroid | 50 |
+| Items friends acted on in the last 14 days | 50 |
+| Top trending per followed jurisdiction | 50 |
+
+### 6.2 Signals and starting weights **[PROPOSED]**
+
+Every signal is normalized to 0–1. Weights sum to 100 so a score reads as "out of 100."
+
+| Signal | Weight | How it's computed |
+|---|---|---|
+| **Place match** | 20 | 1.0 if the item's places include the user's own district or neighborhood · 0.7 if the item is in a followed jurisdiction **and** sponsored by the user's own representative · 0.5 if only in a followed jurisdiction · 0 otherwise |
+| **Interest match** | 20 | Max over the user's phrases of `clamp((cosine − floor) / (ceiling − floor))`. Starting floor 0.30 and ceiling 0.60, **calibrated on real data**. A tagged topic chip counts as 1.0 |
+| **Followed politician** | 15 | 1.0 primary sponsor · 0.6 co-sponsor · 0.4 other actor |
+| **Timeliness** | 12 | `max(recency, upcoming)`, where recency = `exp(−days_since_last_activity / 14)` and upcoming = 1.0 if the next hearing/vote is within 7 days, falling linearly to 0 at 30 days |
+| **Popularity** | 10 | Percentile of `legislation_stats.trending_score` **within the same jurisdiction**, so city items aren't drowned out by federal ones |
+| **Stage** | 8 | Stage score from §5.2 |
+| **Own history** | 8 | Cosine similarity to a weighted centroid of items the user stanced on (×3), bookmarked (×2) or viewed (×1) in the last 90 days, mapped the same way as interest match |
+| **Friends' activity** | 7 | `min(1, log2(1 + friends_who_acted_14d) / 3)` |
+
+**Staleness multiplier (D8):** ×0.2 if there has been no activity in 180 days. Items with `is_dead = true` are excluded, except in Tracked when the user follows them.
+
+**Neutrality guardrail (spec §1.5, §S3):** party, ideology and stance sentiment are **never** inputs. `feed_candidates` and the scorer never read `legislators.party`, and a unit test asserts this.
+
+### 6.3 Re-rank: sponsor cap (D11)
+
+A greedy pass over each widget's sorted list allows **at most 2 items with the same primary sponsor in the visible slots** (Top for you: 5; each banner: 5). An item over the cap drops below the fold, but isn't removed.
+
+### 6.4 Reasons (provenance tags)
+
+Spec §6 requires a provenance tag on every item. The reason shown is the **signal that contributed the most points**, rendered as copy:
+
+| Top signal | Tag |
+|---|---|
+| Place match | "In your district" / "Popular in Park Slope" |
+| Interest match | "Matches: high-speed rail" |
+| Followed politician | "Because you follow Shahana Hanif" |
+| Timeliness | "Hearing Thursday" |
+| Friends' activity | "3 people you follow weighed in" |
+| Popularity | "Trending in NYC" |
+
+### 6.5 Popular feed (spec §7.3)
+
+The same engine with an empty context. Only timeliness, popularity and stage carry weight (renormalized), across the Federal / NY State / NYC banners.
+
+---
+
+## 7. Feed API & widgets
+
+### 7.1 Server function
+
+```ts
+// src/lib/feed/getFeed.ts
+getFeed(ctx: UserContext, widgets: WidgetRequest[]): Promise<FeedResponse>
+```
+It runs one candidate-and-score pass and slices the results into each requested widget, so a page load with 6 widgets doesn't run 6 rankings.
+
+### 7.2 Widget types (engine only, D12)
+
+| Widget | Source of items | Default size |
+|---|---|---|
+| `top_for_you` | Highest scores across all levels | 5 |
+| `jurisdiction:{level}` / `place:{type}:{id}` | Scored items in that jurisdiction or place, **excluding items already in Top for you** | 5 + "See all" |
+| `tracked` | User's followed legislation, ordered by next event, then last activity | 5 |
+| `trending` | Popularity-only ranking | 5 |
+| `friend_activity` | Items friends acted on, ordered by recency | 5 |
+
+**Default layout** (until the customization UI exists): Top for you → followed jurisdiction banners (Federal → State → City → Neighborhood) → Tracked → Trending → Friend activity.
+
+### 7.3 Endpoints
+
+- `POST /api/feed`: body `{ widgets, guestContext? }`. Signed-in users' context is loaded server-side. Guests send their session context, validated with zod; **no address data is accepted**.
+- `POST /api/interests/resolve`: phrase → cached/embedded vector key + top matches, for onboarding S4.
+
+### 7.4 Caching & performance
+
+| Path | Strategy | Budget (spec §6) |
+|---|---|---|
+| Toggle jurisdiction / politician / chip | Indexed candidate queries, no external calls | p95 ≤ 300 ms |
+| Free-text interest | Phrase cache → at most 1 Voyage call + HNSW search | p95 ≤ 800 ms |
+| Signed-in home feed | Cache the result in Upstash for 10 min, keyed by user + `ranking_config.version`; clear it when the user changes follows | — |
+
+---
+
+## 8. Admin tooling
+
+- **Ranking inspector** (`/admin/ranking`): pick a user or a fixture persona to see their feed with each item's per-signal point breakdown. This is how the weights get tuned, since there's no learned model.
+- **Similarity calibration view:** for a typed phrase, list nearest items with their cosine scores to set the floor and ceiling in §6.2.
+- **Source health:** last sync time, items ingested, items awaiting embedding, and error counts per source.
+
+---
+
+## 9. Testing
+
+| Layer | Tests |
+|---|---|
+| Adapters | Fixture raw records → expected `NormalizedItem` (one test file per adapter) |
+| Scoring | Pure-function unit tests per signal; the "party is never read" assertion |
+| Re-rank | Sponsor-cap edge cases (one prolific sponsor, ties) |
+| Personas | 5 fixture users (e.g. Park Slope transit advocate, guest with no answers, single-issue housing user) with snapshot-tested top-10 feeds, to catch weight-change regressions |
+| Performance | Load script measuring p95 against the §7.4 budgets on a 300k-item synthetic table |
+
+---
+
+## 10. Phased delivery
+
+| Phase | Deliverable | Depends on |
+|---|---|---|
+| **0. Setup** | Voyage API key stored as a secret; `pgvector` enabled in Supabase; `api.voyageai.com` allowed on the network | — |
+| **1. Content layer** | Migration `014`; adapter contract + runner; Legistar adapter; backfill | 0 |
+| **2. Embeddings** | Embed cron; backfill; `interest_phrases` cache; `/api/interests/resolve` | 1 |
+| **3. Ranking engine** | `feed_candidates`; scorer; sponsor cap; reasons; `ranking_config`; persona tests | 2 |
+| **4. Feed & widgets** | `getFeed`, `/api/feed`, default widget layout on the home page, guest context, Popular fallback, onboarding preview wiring | 3 + onboarding UI |
+| **5. Tuning** | Ranking inspector, calibration view, source health; set the similarity floor/ceiling from real data | 4 |
+
+---
+
+## 11. Changes to `onboarding-spec.md` this plan implies
+
+| Spec section | Change |
+|---|---|
+| §2 Geography | "All 50 states at launch" → **NYC first; other states via adapters later** (D5) |
+| §7.2 items 1, 3a, 3d, 4 | Curated topic graph, alias cache and curation workstream → **replaced by direct embedding match against items** (D13). Flat topics remain for chips. **Q7 (topic owner) is no longer a launch blocker** |
+| §7.2 item 5 | Vector store decided: **pgvector in Supabase**, embeddings from **Voyage AI** |
+| §S3 "Active in…" politician suggestions | Depends on a politician activity score that isn't in this plan → **[OPEN] Q3** |
+
+---
+
+## 12. Open questions
+
+| # | Question | Why it matters |
+|---|---|---|
+| Q1 | Review the Claude-artifact onboarding mockup and reconcile it with §6–7 | Widget sizes, provenance tag copy and preview behavior should match the design |
+| Q2 | Approve or adjust the starting weights in §6.2 | They set the feel of the whole feed |
+| Q3 | Is the S3 "Active in [jurisdictions]" politician ranking part of this plan or the suggestion-cards phase? | Onboarding S3 needs it at launch per the spec |
+| Q4 | Similarity floor/ceiling values | Need real embeddings to calibrate (Phase 5) |
+| Q5 | Should we log feed impressions anyway? | Not needed for a formula, but it's cheap and would let you measure click-through by signal and keeps a future ML option open |
+
+---
+
+## 13. Housekeeping
+
+`CLAUDE.md` is out of date: it lists Next.js 14 (the repo runs 16.1.6) and `claude-sonnet-4-20250514` for summaries (`summarize.ts` uses Haiku). Update it alongside Phase 1.
