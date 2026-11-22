@@ -155,6 +155,41 @@ export function resolveItem(
   }
 }
 
+// Never prune more than this share of a source in one run; a bigger drop more
+// likely means a broken read than a real change, so it's left for a human
+const MAX_PRUNE_SHARE = 0.25
+
+async function pruneUnemitted(supabase: SupabaseClient, sourceId: string, emitted: Set<string>): Promise<number> {
+  if (emitted.size === 0) return 0
+  const existing: string[] = []
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase
+      .from('content_items')
+      .select('external_id')
+      .eq('source_id', sourceId)
+      .order('external_id')
+      .range(from, from + 999)
+    if (error) throw new Error(`Prune lookup failed: ${error.message}`)
+    existing.push(...(data ?? []).map((r) => r.external_id as string))
+    if (!data || data.length < 1000) break
+  }
+
+  const stale = existing.filter((id) => !emitted.has(id))
+  if (stale.length > existing.length * MAX_PRUNE_SHARE) {
+    console.warn(`[ingest] not pruning ${stale.length} of ${existing.length} items (over ${MAX_PRUNE_SHARE * 100}%)`)
+    return 0
+  }
+  for (let i = 0; i < stale.length; i += 200) {
+    const { error } = await supabase
+      .from('content_items')
+      .delete()
+      .eq('source_id', sourceId)
+      .in('external_id', stale.slice(i, i + 200))
+    if (error) throw new Error(`Prune failed: ${error.message}`)
+  }
+  return stale.length
+}
+
 export async function runIngest<Raw>(
   supabase: SupabaseClient,
   adapter: SourceAdapter<Raw>
@@ -165,6 +200,7 @@ export async function runIngest<Raw>(
     skipped: 0,
     unchanged: 0,
     written: 0,
+    removed: 0,
     unresolvedPeople: 0,
     unresolvedTopics: 0,
   }
@@ -229,6 +265,8 @@ export async function runIngest<Raw>(
     }
   }
   await flush(batch)
+
+  if (adapter.fullScan) result.removed = await pruneUnemitted(supabase, source.id, seenIds)
 
   await supabase.from('sources').update({ last_synced_at: startedAt.toISOString() }).eq('id', source.id)
 

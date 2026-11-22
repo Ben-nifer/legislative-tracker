@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildJointHearings,
+  buildLandUseDecisions,
   classify,
+  decisionOutcome,
+  emptyContext,
   isLandUseResolution,
   linkedLandUseFile,
   mapStage,
@@ -83,13 +87,52 @@ describe('Land Use resolutions', () => {
     expect(linkedLandUseFile({ ...approval, title: 'Resolution approving the site plan.' })).toBeNull()
   })
 
-  it('goes to the neighborhood level, placed by its LU item, crediting no one', () => {
-    const titles = new Map([['LU 0143-2026', '1455 Coney Island Avenue Rezoning, Brooklyn, Community District 14, Council District 44.']])
-    const item = toContentItem(approval, NOW, titles)
+  const luTitle = '1455 Coney Island Avenue Rezoning, Brooklyn, Community District 14, Council District 44.'
+  const ctx = () => {
+    const c = emptyContext()
+    c.landUseTitles.set('LU 0143-2026', luTitle)
+    c.landUseDecisions = buildLandUseDecisions([approval], c.landUseTitles)
+    return c
+  }
+
+  it('is folded into the LU item it decides', () => {
+    expect(toContentItem(approval, NOW, ctx())).toBeNull()
+  })
+
+  it('puts the decision on the LU item and counts its date as activity', () => {
+    const lu = row({
+      type: null,
+      file_number: 'LU 0143-2026',
+      title: luTitle,
+      status: 'Adopted',
+      last_action_date: '2026-10-01',
+      legislation_history: [{ action_date: '2026-10-01' }],
+    })
+    const item = toContentItem(lu, NOW, ctx())
+    expect(item?.itemType).toBe('project')
+    expect(item?.metadata?.council_decision).toEqual({
+      fileNumber: 'Res 0712-2026',
+      outcome: 'approved',
+      status: 'Adopted',
+      date: '2026-04-01',
+      url: approval.legistar_url,
+    })
+    expect(item?.lastActivityAt).toBe('2026-10-01') // decision older than the LU's own history
+  })
+
+  it('stays a neighborhood item crediting no one when it links to no LU item', () => {
+    const item = toContentItem({ ...approval, title: 'Resolution approving the site plan, Council District 12.' }, NOW, ctx())
     expect(item?.itemType).toBe('resolution')
     expect(item?.jurisdictionLevel).toBe('neighborhood')
-    expect(item?.places).toEqual([{ type: 'council_district', id: '44' }])
+    expect(item?.places).toEqual([{ type: 'council_district', id: '12' }])
     expect(item?.people).toEqual([])
+  })
+
+  it('reads the outcome from the resolution title', () => {
+    expect(decisionOutcome('Resolution approving with modifications the decision of …')).toBe('approved_with_modifications')
+    expect(decisionOutcome('Resolution disapproving the decision of …')).toBe('disapproved')
+    expect(decisionOutcome('Resolution affirming the designation by …')).toBe('affirmed')
+    expect(decisionOutcome('Resolution approving the decision of …')).toBe('approved')
   })
 
   it('keeps sponsors and citywide placement for policy resolutions in that committee', () => {
@@ -239,5 +282,38 @@ describe('resolveItem', () => {
     expect(a.ingest_hash).toBe(b.ingest_hash)
     expect(c.ingest_hash).not.toBe(a.ingest_hash)
     expect(c.content_hash).not.toBe(a.content_hash)
+  })
+})
+
+describe('joint hearings', () => {
+  const hearing = (file_number: string, committee: string, intro_date = '2026-12-16') =>
+    row({
+      type: null,
+      file_number,
+      title: 'Oversight -  Addressing New York City’s Aging Homeless Population.',
+      intro_date,
+      committees: { name: committee },
+      sponsorships: [],
+    })
+  const rows = [
+    hearing('T2026-2742', 'Committee on Aging'),
+    hearing('T2026-2741', 'Committee on General Welfare'),
+    hearing('T2026-0100', 'Committee on Aging', '2026-03-02'), // same title, another day
+  ]
+  const ctx = { ...emptyContext(), jointHearings: buildJointHearings(rows) }
+
+  it('emits one item per joint hearing, listing every committee', () => {
+    const item = toContentItem(rows[1], NOW, ctx)
+    expect(item?.externalId).toBe('T2026-2741')
+    expect(item?.metadata?.committees).toEqual(['Committee on Aging', 'Committee on General Welfare'])
+    expect(item?.metadata?.joint_file_numbers).toEqual(['T2026-2741', 'T2026-2742'])
+    expect(toContentItem(rows[0], NOW, ctx)).toBeNull()
+  })
+
+  it('keeps same-title hearings on different days separate', () => {
+    const item = toContentItem(rows[2], NOW, ctx)
+    expect(item?.externalId).toBe('T2026-0100')
+    expect(item?.metadata?.committees).toEqual(['Committee on Aging'])
+    expect(item?.metadata?.joint_file_numbers).toBeUndefined()
   })
 })

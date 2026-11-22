@@ -19,7 +19,7 @@ async function main() {
   const started = Date.now()
 
   const result = await runIngest(supabase, createNycLegistarAdapter(supabase))
-  console.log(`✅ ${result.source}: ${result.written} written, ${result.unchanged} unchanged, ${result.skipped} skipped of ${result.seen} rows`)
+  console.log(`✅ ${result.source}: ${result.written} written, ${result.unchanged} unchanged, ${result.skipped} skipped of ${result.seen} rows, ${result.removed} removed`)
   if (result.unresolvedPeople) console.warn(`⚠️  ${result.unresolvedPeople} sponsors had no legislator_external_ids match`)
   if (result.unresolvedTopics) console.warn(`⚠️  ${result.unresolvedTopics} topic slugs had no topics match`)
 

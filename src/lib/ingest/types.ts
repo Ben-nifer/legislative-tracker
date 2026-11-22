@@ -62,6 +62,9 @@ export interface SourceAdapter<Raw> {
   // Adapters may ignore it and emit everything; the runner skips unchanged items.
   fetchChanged(since: Date | null): AsyncIterable<Raw>
   toContentItem(raw: Raw): NormalizedItem | null // null = skip
+  // true when every run emits the source's whole catalog: after a clean run,
+  // items it no longer emits (now skipped or folded) are deleted
+  fullScan?: boolean
 }
 
 export interface IngestResult {
@@ -70,6 +73,7 @@ export interface IngestResult {
   skipped: number // toContentItem returned null
   unchanged: number
   written: number
+  removed: number // full-scan adapters only: items no longer emitted
   unresolvedPeople: number
   unresolvedTopics: number
 }

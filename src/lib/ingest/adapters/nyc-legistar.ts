@@ -114,17 +114,118 @@ function latestDate(...dates: (string | null | undefined)[]): string | null {
   return valid.length ? valid.reduce((a, b) => (a > b ? a : b)) : null
 }
 
-// landUseTitles: LU file number → title, for placing Land Use resolutions whose
-// own title names no district
+// The Council's decision on a Land Use application, folded into the LU item
+export interface LandUseDecision {
+  fileNumber: string // the resolution, e.g. "Res 0712-2026"
+  outcome: 'approved' | 'approved_with_modifications' | 'disapproved' | 'affirmed' | 'other'
+  status: string
+  date: string | null
+  url: string | null
+}
+
+// One oversight hearing held jointly by several committees, each filing its own T-item
+export interface JointHearing {
+  canonical: string // the lowest file number, the one emitted
+  fileNumbers: string[]
+  committees: string[]
+}
+
+// Lookups the adapter preloads once per run
+export interface AdapterContext {
+  landUseTitles: Map<string, string> // LU file number → title
+  landUseDecisions: Map<string, LandUseDecision> // LU file number → its Council decision
+  jointHearings: Map<string, JointHearing> // any member's file number → its group
+}
+
+export const emptyContext = (): AdapterContext => ({
+  landUseTitles: new Map(),
+  landUseDecisions: new Map(),
+  jointHearings: new Map(),
+})
+
+export function decisionOutcome(title: string): LandUseDecision['outcome'] {
+  const t = title.trim()
+  if (/^Resolution approving with modifications/i.test(t)) return 'approved_with_modifications'
+  if (/^Resolution disapproving/i.test(t)) return 'disapproved'
+  if (/^Resolution affirming/i.test(t)) return 'affirmed'
+  if (/^Resolution approving/i.test(t)) return 'approved'
+  return 'other'
+}
+
+type DecisionRow = Pick<
+  LegistarContentRow,
+  'file_number' | 'title' | 'type' | 'status' | 'intro_date' | 'last_action_date' | 'legistar_url' | 'committees'
+>
+
+// LU file number → the Land Use resolution that decided it (one per LU item in practice)
+export function buildLandUseDecisions(rows: DecisionRow[], landUseTitles: Map<string, string>): Map<string, LandUseDecision> {
+  const decisions = new Map<string, LandUseDecision>()
+  for (const r of rows) {
+    if (/^T\d/.test(r.file_number) || !isLandUseResolution(r)) continue
+    const lu = linkedLandUseFile(r)
+    if (!lu || !landUseTitles.has(lu)) continue
+    const decision: LandUseDecision = {
+      fileNumber: r.file_number,
+      outcome: decisionOutcome(r.title),
+      status: r.status,
+      date: latestDate(r.last_action_date, r.intro_date),
+      url: r.legistar_url,
+    }
+    const prior = decisions.get(lu)
+    if (!prior || (decision.date ?? '') > (prior.date ?? '')) decisions.set(lu, decision) // latest wins
+  }
+  return decisions
+}
+
+const hearingKey = (title: string, date: string | null) =>
+  `${title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()}|${date ?? ''}`
+
+// Oversight T-items with the same title on the same date are one joint hearing
+export function buildJointHearings(
+  rows: Pick<LegistarContentRow, 'file_number' | 'title' | 'intro_date' | 'committees'>[]
+): Map<string, JointHearing> {
+  const groups = new Map<string, typeof rows>()
+  for (const r of rows) {
+    if (!/^T\d/.test(r.file_number) || !/^Oversight/i.test(r.title.trim())) continue
+    const key = hearingKey(r.title, r.intro_date)
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(r)
+  }
+  const byFile = new Map<string, JointHearing>()
+  for (const members of groups.values()) {
+    if (members.length < 2) continue
+    const fileNumbers = members.map((m) => m.file_number).sort()
+    const committees = [...new Set(members.map((m) => m.committees?.name).filter((n): n is string => !!n))].sort()
+    const group = { canonical: fileNumbers[0], fileNumbers, committees }
+    for (const f of fileNumbers) byFile.set(f, group)
+  }
+  return byFile
+}
+
 export function toContentItem(
   row: LegistarContentRow,
   now: Date = new Date(),
-  landUseTitles: Map<string, string> = new Map()
+  ctx: AdapterContext = emptyContext()
 ): NormalizedItem | null {
   const itemType = classify(row)
   if (!itemType || !row.legistar_url) return null
 
-  const lastActivity = latestDate(row.legislation_history[0]?.action_date, row.last_action_date, row.intro_date)
+  // Folded into another item: a Land Use decision into its LU item, a joint
+  // hearing's extra filings into the first one
+  if (itemType === 'resolution' && isLandUseResolution(row)) {
+    const lu = linkedLandUseFile(row)
+    if (lu && ctx.landUseTitles.has(lu)) return null
+  }
+  const joint = itemType === 'hearing' ? ctx.jointHearings.get(row.file_number) : undefined
+  if (joint && joint.canonical !== row.file_number) return null
+  const decision = itemType === 'project' ? ctx.landUseDecisions.get(row.file_number) : undefined
+
+  const lastActivity = latestDate(
+    row.legislation_history[0]?.action_date,
+    row.last_action_date,
+    row.intro_date,
+    decision?.date
+  )
   if (!lastActivity) return null
 
   const nextEventAt = row.events
@@ -146,7 +247,7 @@ export function toContentItem(
   if (isLandUse) {
     landUseDistricts = parseCouncilDistricts(row.title)
     const linked = itemType === 'resolution' && !landUseDistricts.length ? linkedLandUseFile(row) : null
-    if (linked) landUseDistricts = parseCouncilDistricts(landUseTitles.get(linked) ?? '')
+    if (linked) landUseDistricts = parseCouncilDistricts(ctx.landUseTitles.get(linked) ?? '')
   }
 
   const places: NormalizedItem['places'] = isLandUse
@@ -184,7 +285,17 @@ export function toContentItem(
     places,
     people,
     topicSlugs: row.legislation_topics.map((t) => t.topics?.slug).filter((s): s is string => !!s),
-    metadata: { file_number: row.file_number, slug: row.slug },
+    metadata: {
+      file_number: row.file_number,
+      slug: row.slug,
+      ...(decision ? { council_decision: decision } : {}),
+      ...(itemType === 'hearing'
+        ? {
+            committees: joint?.committees ?? (row.committees ? [row.committees.name] : []),
+            ...(joint ? { joint_file_numbers: joint.fileNumbers } : {}),
+          }
+        : {}),
+    },
     legislationId: row.id,
   }
 }
@@ -199,18 +310,56 @@ const SELECT = `
   events(event_date)
 `
 
-async function loadLandUseTitles(supabase: SupabaseClient): Promise<Map<string, string>> {
-  const titles = new Map<string, string>()
+async function readAll<T>(
+  label: string,
+  query: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>
+): Promise<T[]> {
+  const rows: T[] = []
   for (let from = 0; ; from += 1000) {
-    const { data, error } = await supabase
-      .from('legislation')
-      .select('file_number, title')
-      .like('file_number', 'LU %')
-      .order('file_number')
-      .range(from, from + 999)
-    if (error) throw new Error(`[nyc-legistar] Land Use titles read failed: ${error.message}`)
-    for (const r of data ?? []) titles.set(r.file_number, r.title)
-    if (!data || data.length < 1000) return titles
+    const { data, error } = await query(from, from + 999)
+    if (error) throw new Error(`[nyc-legistar] ${label} read failed: ${error.message}`)
+    rows.push(...(data ?? []))
+    if (!data || data.length < 1000) return rows
+  }
+}
+
+async function loadContext(supabase: SupabaseClient, committeeNames: Map<string, string>): Promise<AdapterContext> {
+  const withCommittee = <R extends { committee_id: string | null }>(r: R) => {
+    const name = r.committee_id ? committeeNames.get(r.committee_id) : undefined
+    return { ...r, committees: name ? { name } : null }
+  }
+
+  const [landUse, resolutions, hearings] = await Promise.all([
+    readAll<{ file_number: string; title: string }>('Land Use titles', (from, to) =>
+      supabase.from('legislation').select('file_number, title').like('file_number', 'LU %').order('file_number').range(from, to)
+    ),
+    readAll<Omit<DecisionRow, 'committees'> & { committee_id: string | null }>('Land Use resolutions', (from, to) =>
+      supabase
+        .from('legislation')
+        .select('file_number, title, type, status, intro_date, last_action_date, legistar_url, committee_id')
+        .eq('type', 'resolution')
+        .ilike('title', '%L.U. No%')
+        .order('file_number')
+        .range(from, to)
+    ),
+    readAll<{ file_number: string; title: string; intro_date: string | null; committee_id: string | null }>(
+      'oversight hearings',
+      (from, to) =>
+        supabase
+          .from('legislation')
+          .select('file_number, title, intro_date, committee_id')
+          .like('file_number', 'T%')
+          .ilike('title', '%Oversight%')
+          .order('file_number')
+          .range(from, to)
+    ),
+  ])
+
+  const landUseTitles = new Map(landUse.map((r) => [r.file_number, r.title]))
+  return {
+    landUseTitles,
+    landUseDecisions: buildLandUseDecisions(resolutions.map(withCommittee), landUseTitles),
+    jointHearings: buildJointHearings(hearings.map(withCommittee)),
   }
 }
 
@@ -222,17 +371,18 @@ async function loadCommitteeNames(supabase: SupabaseClient): Promise<Map<string,
 
 export function createNycLegistarAdapter(supabase: SupabaseClient): SourceAdapter<LegistarContentRow> {
   const now = new Date()
-  let landUseTitles = new Map<string, string>()
+  let ctx = emptyContext()
 
   return {
     slug: 'nyc-legistar',
+    fullScan: true,
 
     // Full scan every run: legislation.updated_at never changes, and summaries,
     // sponsors and history change without touching it. The runner skips
     // unchanged items by hash, so `since` is ignored here.
     async *fetchChanged() {
-      landUseTitles = await loadLandUseTitles(supabase)
       const committeeNames = await loadCommitteeNames(supabase)
+      ctx = await loadContext(supabase, committeeNames)
       let cursor = '00000000-0000-0000-0000-000000000000'
       for (;;) {
         const { data, error } = await supabase
@@ -257,6 +407,6 @@ export function createNycLegistarAdapter(supabase: SupabaseClient): SourceAdapte
       }
     },
 
-    toContentItem: (row) => toContentItem(row, now, landUseTitles),
+    toContentItem: (row) => toContentItem(row, now, ctx),
   }
 }
