@@ -9,7 +9,7 @@
 **GitHub Repository:** `legislative-tracker`
 **Development Environment:** Claude Code CLI in VS Code integrated terminal
 
-> **Active work:** We're implementing **`recommendations-plan.md`** phase by phase (content layer → embeddings → ranking → feed widgets → tuning). It builds on **`onboarding-spec.md`**. Read both before working on onboarding, the home feed, `src/lib/ingest/`, or anything touching `content_items`. Decisions marked [DECIDED] there are final; ask before deciding anything the plan doesn't cover.
+> **Active work:** We're implementing **`recommendations-planv1.2.md`** phase by phase (content layer → embeddings → shared ranking → feed widgets → tuning). It builds on **`onboarding-spec.md`**; the screens and home-widget build is planned in **`onboarding-build-planv1.1.md`**. Read them before working on onboarding, the home feed, `src/lib/ingest/`, or anything touching `content_items`. Decisions marked [DECIDED] there are final; ask before deciding anything the plan doesn't cover.
 >
 > **Progress lives in the plan's §14 Done log.** Read it first to see which phases are finished and what was decided during each build. When you finish a phase, add a short entry there before committing: what shipped, decisions made that the plan didn't cover, and anything left open. Never apply a migration to Supabase without the user's explicit approval.
 
@@ -209,13 +209,13 @@ legislative-tracker/
 │   │   │   ├── client.ts
 │   │   │   ├── sync.ts
 │   │   │   └── types.ts
-│   │   ├── ingest/               # Content layer (recommendations-plan.md §4)
+│   │   ├── ingest/               # Content layer (recommendations-planv1.2.md §4)
 │   │   │   ├── types.ts          # SourceAdapter / NormalizedItem contract
 │   │   │   ├── run.ts            # Shared runner: resolve IDs, hash, upsert
 │   │   │   ├── index.ts          # Registered adapters
 │   │   │   └── adapters/
 │   │   │       └── nyc-legistar.ts
-│   │   ├── embeddings/           # Voyage embeddings (recommendations-plan.md §5)
+│   │   ├── embeddings/           # Voyage embeddings (recommendations-planv1.2.md §5)
 │   │   │   ├── voyage.ts         # Client, active model constant
 │   │   │   ├── embed-content.ts  # Item + topic embed jobs (cron, backfill)
 │   │   │   └── interests.ts      # Free-text phrase cache + matching
@@ -381,7 +381,7 @@ LEGISTAR_API_TOKEN=
 # AI
 ANTHROPIC_API_KEY=
 OPENAI_API_KEY=
-VOYAGE_API_KEY=          # Embeddings (recommendations-plan.md §5)
+VOYAGE_API_KEY=          # Embeddings (recommendations-planv1.2.md §5)
 
 # Cron
 CRON_SECRET=

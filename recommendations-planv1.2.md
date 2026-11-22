@@ -1,6 +1,6 @@
 # Recommendations Plan — Content Layer, Embeddings & Feed Ranking
 
-**Status:** Draft v1.2 · 2026-11-22 · **Phase 1 done** (see §14 Done log) · **v1.2: every widget is shared, not personalized; no "Top for you"; topic and politician widgets** (D22–D32) · Built from product-owner interview answers and a review of the onboarding mockup (Claude design canvas "Civic App Onboarding": iPhone clickable flow + web split view).
+**Status:** Draft v1.2 · 2026-11-22 · **Phase 1 done; Phase 2 partly done** (embeddings + phrase cache; v1.2 additions pending, see §14 Done log) · **v1.2: every widget is shared, not personalized; no "Top for you"; topic and politician widgets** (D22–D32) · Built from product-owner interview answers and a review of the onboarding mockup (Claude design canvas "Civic App Onboarding": iPhone clickable flow + web split view).
 **Builds on:** `onboarding-spec.md` v1.1 (§6 live preview, §7 content & ranking).
 **Scope:** The data layer, embeddings pipeline and ranking engine behind the onboarding live preview and the home-feed widgets.
 
@@ -464,7 +464,7 @@ It derives the user's widget list from their follows (or the guest session), rea
 |---|---|---|
 | **0. Setup** | ✅ Folded into Phase 1 | — |
 | **1. Content layer** | ✅ Done (§14) | — |
-| **2. Embeddings** | Embed cron; backfill; `interest_phrases` cache; **migration `023` (§3.6)**; `places` gazetteer seed; place detection + async Haiku fallback (§5.3); `/api/interests/resolve` | 1 |
+| **2. Embeddings** | ✅ Embed cron; ✅ backfill; ✅ `interest_phrases` cache; **migration `023` (§3.6)**; `places` gazetteer seed; place detection + async Haiku fallback (§5.3); `/api/interests/resolve` (✅ v1.1 version; needs place detection + widget output) | 1 |
 | **3. Shared ranking** | Importance (§6.2, incl. new-account cap) + recency (§6.3); widget formulas (§6.4); sponsor cap; 15-minute precompute into `widget_cache`; S3 politician ranking (§6.7); `ranking_config` v2; widget snapshot tests | 2 |
 | **4. Feed & widgets** | `getFeed`, `/api/feed` (with new-item diff), default layout (§7.2), guest session, zero-selection view, onboarding preview wiring, related-topic suggestions, impression/click logging | 3 + onboarding UI |
 | **5. Tuning** | Ranking inspector, weights editor, signal performance panel, calibration view, phrase review list, source health, S3 party-mix audit | 4 |
@@ -528,6 +528,30 @@ One short section per finished phase: what shipped, decisions made during the bu
 - **Hearings:** `syncEvents()` is now called from the sync-legislation cron, so `next_event_at` and `hearing_scheduled` start filling in after deploy.
 
 **Left open:** Q8 above. `syncEvents()` shares the sync cron's 300s budget; move it to its own cron if timeouts appear. The HNSW index assumes `voyage-3.5`; recreate it if Phase 2 picks a different model.
+
+### Phase 2 — Embeddings, part 1 ✅ (2026-11-21, commit `0c7296b`)
+
+Built to the **v1.1** Phase 2 scope, before v1.2 landed. The v1.2 additions to Phase 2 are listed under *Left open*.
+
+**Shipped:** migration `022_embeddings.sql` (applied): `content_items_to_embed`, `interest_phrase_hit`, `store_interest_phrase`, `match_phrase_items`, `match_phrase_topics`, all service-role only, plus a `content_hash` column on `topic_embeddings`. `src/lib/embeddings/` (Voyage client with retry/backoff, embed jobs, phrase normalization and resolve). `/api/cron/embed-content` at `30 */2 * * *` (240s budget per run). `POST /api/interests/resolve`, rate-limited to 60/hour per IP. `npm run backfill:embeddings` (ran: 9,169 items + 27 topics, ~800K tokens, 102s; re-run writes 0). Vitest tests for normalization, embedding text, the Voyage client and topic picking. `VOYAGE_API_KEY` is now also set for Production in Vercel.
+
+**Decisions made during the build:**
+- **Model:** stayed on `voyage-3.5` (1024-d), so the 020 HNSW index stands. `voyage-4` also works with this key at 1024-d. Switching means changing `EMBEDDING_MODEL`, recreating the partial index and re-running the backfill. No schema change.
+- **Topic text:** `topics` has no description column, so the one-line descriptions live in `TOPIC_DESCRIPTIONS` in `embed-content.ts`. Topics not in the map embed from their name alone. The hash covers name + description, so editing either re-embeds on the next cron.
+- **Phrase matching runs in SQL by cache key.** The phrase vector never leaves the DB. Topic suggestions use SQL too (v1.1 said "in memory"); at 27 rows that comes to the same thing.
+- **Topic suggestion rule (D18):** a topic needs similarity ≥ 0.40 **and** must be within 0.06 of the best topic, max 3. A floor alone surfaced generic topics ("Small Business" scores ~0.44 against "bike lanes"). Sample results: bike lanes → Transportation; rent control → Housing & Rent; dog parks → Parks & Recreation; high-speed rail → Transportation; rats / e-bike batteries → none.
+- **Item floor** comes from the active `ranking_config.params.similarity_floor` (0.30).
+- **Pre-filters by `jurisdiction_level` only** (optional `levels`), plus `not is_dead`.
+- **`excludeTopicIds`** on the resolve endpoint, so topics the user already follows aren't suggested back.
+- Phrase cache: a row stored under a different model counts as a miss and is overwritten.
+- **Normalization:** punctuation becomes a space ("high-speed rail" → "high speed rail").
+
+**Measured:** cache hit ~180 ms; miss (one Voyage call) 330–890 ms, run from a laptop against live Supabase. On-topic items score ~0.55–0.65 and loose matches ~0.38–0.48, so the 0.30 item floor is probably low (Q4).
+
+**Left open:**
+- **v1.2 Phase 2 additions not built:** migration `023` (§3.6), `places` gazetteer seed, place detection + async Haiku fallback (§5.3 steps 2–3, 5). `/api/interests/resolve` still returns a matched-item list (v1.1 shape); under v1.2 it should create/rank an `interest:{phrase}` widget and embed `topic_text` (phrase minus place) rather than the whole phrase.
+- `/api/interests/resolve` wasn't HTTP-tested locally (`.env.local` has no `KV_REST_API_*`, and the local dev server hung). Only the library path behind it was exercised, against live data. Smoke-test it on the Preview deploy.
+- Duplicate topics (Housing / Housing & Rent, Land Use / Land Use & Zoning, Finance & Budget / Budget & Finance, Seniors / Senior Services, Youth Services / Youth & Families, Civil Rights / Civil Rights & Equity) split suggestions, and under v1.2 would create near-duplicate topic widgets. Worth merging before onboarding ships.
 
 ---
 
