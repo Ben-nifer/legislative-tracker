@@ -367,7 +367,8 @@ describe('mayoral actors', () => {
   const id = '11111111-1111-1111-1111-111111111111'
 
   it('recognizes actions the Mayor takes, not ones sent to them', () => {
-    expect(isMayoralAction('Returned Unsigned by Mayor')).toBe(true)
+    expect(isMayoralAction('Signed Into Law by Mayor')).toBe(true)
+    expect(isMayoralAction('Returned Unsigned by Mayor')).toBe(false)
     expect(isMayoralAction('Vetoed by Mayor')).toBe(true)
     expect(isMayoralAction('Hearing Held by Mayor')).toBe(true)
     expect(isMayoralAction('Sent to Mayor by Council')).toBe(false)
@@ -377,7 +378,8 @@ describe('mayoral actors', () => {
   it('credits each action to the mayor in office on that date', () => {
     const actors = buildMayoralActors(
       [
-        { legislation_id: id, action_date: '2026-03-02', action_text: 'Returned Unsigned by Mayor' },
+        { legislation_id: id, action_date: '2026-03-02', action_text: 'Vetoed by Mayor' },
+        { legislation_id: 'unsigned', action_date: '2026-03-02', action_text: 'Returned Unsigned by Mayor' },
         { legislation_id: id, action_date: '2026-03-02', action_text: 'Hearing Held by Mayor' },
         { legislation_id: 'old', action_date: '2025-07-01', action_text: 'Signed Into Law by Mayor' },
         { legislation_id: 'sent', action_date: '2026-02-01', action_text: 'Sent to Mayor by Council' },
@@ -387,6 +389,7 @@ describe('mayoral actors', () => {
     expect(actors.get(id)).toEqual(['manual:zohran-mamdani'])
     expect(actors.get('old')).toEqual(['manual:previous-mayor'])
     expect(actors.has('sent')).toBe(false)
+    expect(actors.has('unsigned')).toBe(false)
   })
 
   it('ignores actions before any recorded term', () => {

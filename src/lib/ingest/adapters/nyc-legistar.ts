@@ -153,9 +153,13 @@ export interface MayorTerm {
 }
 
 // History actions the Mayor takes ("Signed Into Law by Mayor", "Vetoed by Mayor",
-// "Returned Unsigned by Mayor", "Hearing Held by Mayor"…). "Sent to Mayor by
-// Council" and "… by Mayor Cancelled" don't end this way.
-export const isMayoralAction = (actionText: string) => /\bby Mayor$/i.test(actionText.trim())
+// "Hearing Held by Mayor"…). "Sent to Mayor by Council" and "… by Mayor
+// Cancelled" don't end this way. "Returned Unsigned by Mayor" (law without a
+// signature) is excluded: the Mayor didn't act on the bill (product decision).
+export const isMayoralAction = (actionText: string) => {
+  const text = actionText.trim()
+  return /\bby Mayor$/i.test(text) && !/^Returned Unsigned/i.test(text)
+}
 
 // Credits each mayoral action to the mayor in office on that date, so a
 // predecessor's vetoes never land in the current Mayor's widget
@@ -304,7 +308,7 @@ export function toContentItem(
           legislatorExternalId: String(s.legislators!.legistar_id),
           role: s.is_primary ? ('primary_sponsor' as const) : ('sponsor' as const),
         }))
-  // The Mayor is an actor on items they signed, vetoed, returned unsigned or held a hearing on
+  // The Mayor is an actor on items they signed, vetoed, withdrew or held a hearing on
   for (const externalId of ctx.mayoralActors.get(row.id) ?? []) {
     people.push({ legislatorExternalId: externalId, role: 'actor' })
   }
