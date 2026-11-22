@@ -349,7 +349,7 @@ One short section per finished phase: what shipped, decisions made during the bu
 - The 7% of items without a headline show the long official title.
 - Mobile home page reuses the desktop header (wraps to two lines); the export only has a web S6.
 
-### Phase B3 — Neighborhood adapter (2026-11-22, built; migration 027 not applied yet)
+### Phase B3 — Neighborhood adapter ✅ (2026-11-22)
 
 **Shipped:** migration `027_neighborhood_adapter.sql` (**written, not applied**): `local_proposal_rows(p_after, p_limit)`, a service-role read that pages `local_proposals` with the NTA codes its geometry intersects (`ST_Intersects` against `neighborhoods`), the latest history milestone and the ULURP/DOT detail rows; plus the `nyc-local-proposals` source row, **created disabled**. `src/lib/ingest/adapters/nyc-local-proposals.ts` maps rows per §4.8. `src/lib/ingest/index.ts` now groups adapters by cron: `ingestAllSources` (daily, Legistar) and `ingestNeighborhoodSources` (weekly). `/api/cron/ingest-neighborhood` on Mondays 07:30 UTC (after ingest-content, before embed-content and rank-widgets). `npm run backfill:neighborhood`. 17 new tests (145 total). Nothing in the feed, ranking or coverage code changed: `coverage_levels()` and the precompute's per-NTA widgets pick the items up as soon as they exist.
 
@@ -373,7 +373,9 @@ One short section per finished phase: what shipped, decisions made during the bu
 - **Q3 → the neighborhood-map syncs:** `feature/neighborhood-map` is merged into this branch (its crons: sync-ulurp 04:00, sync-dot-projects 04:30, summarize-proposals 06:30 UTC). Crons only run on production, so `local_proposals` refreshes once this reaches `main`. The merge also brings the neighborhood map and proposal pages.
 - *(Mine)* **Daily, one cron:** with daily source syncs, the proposals adapter runs in `ingest-content` after Legistar (so links are known before folding); the weekly `ingest-neighborhood` cron is gone.
 
-**Left open:** after approval, apply 027, run `sync-ulurp` once (fills application numbers), enable the source, `npm run backfill:neighborhood -- --all`, then `backfill:embeddings` and `rank:widgets`.
+**Ran live (2026-11-22, approved):** applied 027; `sync-ulurp` (1,440 proposals, 51 new; 1,184 now carry application numbers); enabled `nyc-local-proposals`; `backfill:neighborhood -- --all` (919 Land Use items located: 507 via ZAP, 264 by block/lot, 18 by address, 130 none; 219 proposals folded into Land Use items); `backfill:embeddings` (1,407 items); `rank:widgets` (201 widgets, 113 of them neighborhoods). Live: 205 Land Use items (200 in a neighborhood, 138 linked to ZAP) and 232 proposals (105 in a neighborhood) are active; the rest are past 12 months. `jurisdiction:city` holds no projects. `coverage_levels()` reports Neighborhood live, so S2's neighborhood card turns on.
+
+**Left open:** 66 of the 205 active Land Use items have no `short_summary`, so their cards show the long official title ("Application number C 260212 ZSM (…) submitted by…"); only 13 active proposals have an AI summary. DOT and proposal items link out (ZAP / Open Data); the merged `/proposals/[slug]` pages could become their in-app link.
 
 ### Phase B4 — Integration ✅ (2026-11-22)
 
