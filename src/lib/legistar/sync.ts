@@ -1,5 +1,6 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { legistar } from './client'
+import { legistarEventTimestamp } from './dates'
 
 function toSlug(text: string): string {
   return text
@@ -498,17 +499,26 @@ export async function syncHistories(
 export async function syncEvents(): Promise<{ synced: number; eventsFetched: number; apiFailed: number }> {
   const supabase = createServiceClient()
 
-  // Build a map of Legistar matter ID → our legislation UUID
-  const { data: legislation } = await supabase
-    .from('legislation')
-    .select('id, legistar_url')
-    .not('legistar_url', 'is', null)
-
+  // Build a map of Legistar matter ID → our legislation UUID. Paged: an
+  // unpaged select stops at PostgREST's 1,000-row cap, which dropped ~87% of
+  // agenda-item links.
   const matterIdToLegislationId = new Map<number, string>()
-  for (const leg of legislation ?? []) {
-    const m = leg.legistar_url!.match(/[?&]id=(\d+)/i)
-    if (m) matterIdToLegislationId.set(Number(m[1]), leg.id)
+  for (let from = 0; ; from += 1000) {
+    const { data: page, error } = await supabase
+      .from('legislation')
+      .select('id, legistar_url')
+      .not('legistar_url', 'is', null)
+      .order('id')
+      .range(from, from + 999)
+    if (error) throw new Error(`Legislation read failed: ${error.message}`)
+    for (const leg of page ?? []) {
+      const m = leg.legistar_url!.match(/[?&]id=(\d+)/i)
+      if (m) matterIdToLegislationId.set(Number(m[1]), leg.id)
+    }
+    if (!page || page.length < 1000) break
   }
+  // The table below is replaced wholesale; never wipe it on a failed read
+  if (matterIdToLegislationId.size === 0) throw new Error('No legislation to match events against')
 
   // Fetch all upcoming events from Legistar (from today forward)
   const today = new Date().toISOString().split('T')[0]
@@ -531,10 +541,11 @@ export async function syncEvents(): Promise<{ synced: number; eventsFetched: num
         if (!item.EventItemMatterId) continue
         const legislationId = matterIdToLegislationId.get(item.EventItemMatterId)
         if (!legislationId) continue
-        if (!event.EventDate || event.EventDate.startsWith('0001-01-01')) continue
+        const eventDate = event.EventDate ? legistarEventTimestamp(event.EventDate, event.EventTime) : null
+        if (!eventDate) continue
         rows.push({
           legislation_id: legislationId,
-          event_date: event.EventDate,
+          event_date: eventDate,
           event_type: event.EventBodyName || null,
           location: event.EventLocation || null,
         })

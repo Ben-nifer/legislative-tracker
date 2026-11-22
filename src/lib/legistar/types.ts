@@ -67,7 +67,8 @@ export interface LegistarHistory {
 export interface LegistarEvent {
   EventId: number
   EventBodyName: string          // e.g. "Committee on Finance", "City Council"
-  EventDate: string              // ISO date string
+  EventDate: string              // "2026-11-23T00:00:00", New York local, no zone
+  EventTime: string | null       // "10:00 AM", New York local
   EventLocation: string | null
   EventAgendaStatusName: string  // "Draft", "Final", etc.
 }
