@@ -16,7 +16,7 @@ export interface Legislator {
 }
 
 export interface LegislatorItems {
-  primary: { introducedAt: string | null; nextEventAt: string | null; lastActivityAt: string }[]
+  primary: { itemType: string; introducedAt: string | null; nextEventAt: string | null; lastActivityAt: string }[]
   cosponsored: { nextEventAt: string | null; lastActivityAt: string }[]
 }
 
@@ -31,6 +31,16 @@ export interface ActivePolitician {
   components: { billsIntroduced: number; upcomingEvents: number; recentActions: number } // points
   counts: { billsIntroduced: number; upcomingEvents: number; recentActions: number }
   reason: string | null // the strongest signal, e.g. "Introduced 4 bills this month"
+}
+
+// Legislation a member files. Land Use resolutions carry no people (the chair
+// is only the listed sponsor), so they never reach this count.
+const INTRODUCED_TYPES = new Set(['bill', 'resolution'])
+
+function introducedText(bills: number, resolutions: number) {
+  const n = bills + resolutions
+  const what = !resolutions ? (n === 1 ? 'bill' : 'bills') : !bills ? (n === 1 ? 'resolution' : 'resolutions') : 'bills and resolutions'
+  return `Introduced ${n} ${what} this month`
 }
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
@@ -61,10 +71,12 @@ export function rankActivePoliticians(
       .map((i) => i.nextEventAt)
       .filter((d): d is string => within(d, 0, 14))
       .sort()
+    const introduced = items.primary.filter((i) => INTRODUCED_TYPES.has(i.itemType) && within(i.introducedAt, -30, 0))
     return {
       legislator: l,
+      introducedBills: introduced.filter((i) => i.itemType === 'bill').length,
       counts: {
-        billsIntroduced: items.primary.filter((i) => within(i.introducedAt, -30, 0)).length,
+        billsIntroduced: introduced.length,
         upcomingEvents: upcoming.length,
         recentActions: all.filter((i) => within(i.lastActivityAt, -30, 0)).length,
       },
@@ -86,7 +98,7 @@ export function rankActivePoliticians(
   }
 
   return raw
-    .map(({ legislator: l, counts, soonestEvent }) => {
+    .map(({ legislator: l, counts, soonestEvent, introducedBills }) => {
       const p = pct.get(l.id)!
       const components = {
         billsIntroduced: Math.round(w.bills_introduced_30d * p.bills * 100) / 100,
@@ -94,7 +106,10 @@ export function rankActivePoliticians(
         recentActions: Math.round(w.recent_actions_30d * p.recent * 100) / 100,
       }
       const reasons: [number, string | null][] = [
-        [components.billsIntroduced, counts.billsIntroduced ? `Introduced ${plural(counts.billsIntroduced, 'bill')} this month` : null],
+        [
+          components.billsIntroduced,
+          counts.billsIntroduced ? introducedText(introducedBills, counts.billsIntroduced - introducedBills) : null,
+        ],
         [
           components.upcomingEvents,
           soonestEvent

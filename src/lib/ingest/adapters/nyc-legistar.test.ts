@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { classify, mapStage, parseCouncilDistricts, toContentItem, type LegistarContentRow } from './nyc-legistar'
+import {
+  classify,
+  isLandUseResolution,
+  linkedLandUseFile,
+  mapStage,
+  parseCouncilDistricts,
+  toContentItem,
+  type LegistarContentRow,
+} from './nyc-legistar'
 import { resolveItem } from '../run'
 
 const NOW = new Date('2026-11-20T12:00:00Z')
@@ -21,6 +29,8 @@ function row(overrides: Partial<LegistarContentRow> = {}): LegistarContentRow {
       { is_primary: true, legislators: { legistar_id: 101, district: '39' } },
       { is_primary: false, legislators: { legistar_id: 202, district: '33' } },
     ],
+    committee_id: null,
+    committees: { name: 'Committee on Transportation and Infrastructure' },
     legislation_topics: [{ topics: { slug: 'transportation' } }],
     legislation_history: [{ action_date: '2026-05-10' }],
     events: [],
@@ -43,6 +53,49 @@ describe('classify', () => {
     expect(classify(row({ type: null, file_number: 'M 0012-2026' }))).toBeNull()
     expect(classify(row({ type: null, file_number: 'SLR 0003-2026' }))).toBeNull()
     expect(classify(row({ type: null, file_number: 'T2026-0001', title: 'Tour - Hunts Point Market.' }))).toBeNull()
+  })
+
+  it('skips T-numbered Intros and Resolutions (pre-filing duplicates of the Int/Res)', () => {
+    expect(classify(row({ type: 'introduction', file_number: 'T2026-2298' }))).toBeNull()
+    expect(classify(row({ type: 'resolution', file_number: 'T2026-2641' }))).toBeNull()
+  })
+})
+
+describe('Land Use resolutions', () => {
+  const approval = row({
+    type: 'resolution',
+    file_number: 'Res 0712-2026',
+    title: 'Resolution approving the decision of the City Planning Commission on ULURP No. N 220450 ZRK (L.U. No. 143).',
+    committees: { name: 'Committee on Land Use' },
+    status: 'Adopted',
+    sponsorships: [{ is_primary: true, legislators: { legistar_id: 999, district: '18' } }],
+  })
+
+  it('recognizes the committee\'s application decisions, not its policy resolutions', () => {
+    expect(isLandUseResolution(approval)).toBe(true)
+    expect(isLandUseResolution({ ...approval, committees: { name: 'Subcommittee on Zoning and Franchises' } })).toBe(true)
+    expect(isLandUseResolution({ ...approval, title: 'Resolution calling on the Governor to sign S.1234.' })).toBe(false)
+    expect(isLandUseResolution({ ...approval, committees: { name: 'Committee on Finance' } })).toBe(false)
+  })
+
+  it('links "(L.U. No. 143)" to the LU item of the same year', () => {
+    expect(linkedLandUseFile(approval)).toBe('LU 0143-2026')
+    expect(linkedLandUseFile({ ...approval, title: 'Resolution approving the site plan.' })).toBeNull()
+  })
+
+  it('goes to the neighborhood level, placed by its LU item, crediting no one', () => {
+    const titles = new Map([['LU 0143-2026', '1455 Coney Island Avenue Rezoning, Brooklyn, Community District 14, Council District 44.']])
+    const item = toContentItem(approval, NOW, titles)
+    expect(item?.itemType).toBe('resolution')
+    expect(item?.jurisdictionLevel).toBe('neighborhood')
+    expect(item?.places).toEqual([{ type: 'council_district', id: '44' }])
+    expect(item?.people).toEqual([])
+  })
+
+  it('keeps sponsors and citywide placement for policy resolutions in that committee', () => {
+    const item = toContentItem({ ...approval, title: 'Resolution calling on the Governor to sign S.1234.' }, NOW)
+    expect(item?.jurisdictionLevel).toBe('city')
+    expect(item?.people).toEqual([{ legislatorExternalId: '999', role: 'primary_sponsor' }])
   })
 })
 

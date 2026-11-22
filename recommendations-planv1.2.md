@@ -605,6 +605,12 @@ Built to the **v1.1** Phase 2 scope, before v1.2 landed. The v1.2 additions to P
 - **Q8** (Land Use items vs `local_proposals`) didn't block Phase 3 (`local_proposals` aren't in `content_items` yet) but must be decided before the B3 neighborhood adapter.
 - Hearing items' `last_activity_at` is the hearing date, which can be in the future; recency treats that as "now" (1.0).
 
+**Follow-up fixes (same day, product-owner decisions):**
+- **T-numbered Intros/Resolutions removed.** `classify` checked the matter type before the T prefix, so 323 pre-filing T records (283 with an identical Int/Res twin) were in `content_items` as duplicates, against the Phase 1 decision. The adapter now checks the T prefix first (only "Oversight" hearings pass), and the 323 rows were deleted (their `legislation` rows and bookmarks are untouched).
+- **Land Use resolutions credit no one and live in the neighborhood level.** The Council's decisions on Land Use applications (Land Use committee or its subcommittees; not "calling on / in support of / urging" policy resolutions) are filed under the Land Use chair, which put Kevin C. Riley at the top of S3 with 18 "bills" (2 were his). Like Land Use items, they now have no people and `jurisdiction_level = neighborhood`, placed by the council districts in their title, or else in the title of the LU item they cite ("L.U. No. 143" → `LU 0143-2026`; 676 of 706 link). 28 have no district. Committee names are attached in the adapter from `committee_id` (there's no FK to embed).
+- **S3 "introduced" counts bills and resolutions**, worded by what was filed ("Introduced 2 bills and resolutions this month").
+- **Still open:** Land Use items and resolutions are tagged to council districts, but neighborhood widgets are keyed by NTA, so they won't appear in a neighborhood widget until there's a district → NTA crosswalk (build plan B1/B3). Each approval resolution also overlaps the LU item it decides (one application, two items); consider folding the resolution's outcome into the LU item, alongside Q8.
+
 ---
 
 ## 15. Research notes: measuring importance

@@ -25,6 +25,8 @@ export interface LegistarContentRow {
     is_primary: boolean | null
     legislators: { legistar_id: number | null; district: string | null } | null
   }[]
+  committee_id: string | null
+  committees: { name: string } | null // attached from committee_id (no FK to embed)
   legislation_topics: { topics: { slug: string } | null }[]
   legislation_history: { action_date: string | null }[] // newest only
   events: { event_date: string | null }[] // upcoming only
@@ -62,13 +64,32 @@ export function mapStage(status: string, hasUpcomingEvent: boolean): Stage | und
 }
 
 // Intros and Resolutions by type; Land Use and Oversight hearings by file number.
-// Mayoral communications (M), SLRs and other T-items are skipped.
+// Mayoral communications (M), SLRs and other T-items are skipped. T-items are
+// checked first: Legistar files a matter under a temporary T number before it
+// gets its Int/Res number, so T-numbered Intros and Resolutions are duplicates.
 export function classify(row: Pick<LegistarContentRow, 'type' | 'file_number' | 'title'>): ItemType | null {
+  if (/^T\d/.test(row.file_number)) return /^Oversight/i.test(row.title.trim()) ? 'hearing' : null
   if (row.type === 'introduction') return 'bill'
   if (row.type === 'resolution') return 'resolution'
   if (/^LU\s/.test(row.file_number)) return 'project'
-  if (/^T\d/.test(row.file_number) && /^Oversight/i.test(row.title.trim())) return 'hearing'
   return null
+}
+
+const LAND_USE_COMMITTEE = /land use|zoning and franchises|landmarks/i
+const POLICY_RESOLUTION = /^Resolution (calling|in support|urging)/i
+
+// The Council's decisions on Land Use applications ("Resolution approving the
+// decision of the City Planning Commission…"). Like Land Use items, the listed
+// sponsor is the committee chair. Policy resolutions in that committee aren't.
+export function isLandUseResolution(row: Pick<LegistarContentRow, 'type' | 'title' | 'committees'>): boolean {
+  return row.type === 'resolution' && LAND_USE_COMMITTEE.test(row.committees?.name ?? '') && !POLICY_RESOLUTION.test(row.title.trim())
+}
+
+// "(L.U. No. 151)" in a Land Use resolution → "LU 0151-2026", using the resolution's year
+export function linkedLandUseFile(row: Pick<LegistarContentRow, 'title' | 'file_number'>): string | null {
+  const luNo = row.title.match(/L\.U\. Nos?\.\s*(\d+)/)?.[1]
+  const year = row.file_number.match(/-(\d{4})$/)?.[1]
+  return luNo && year ? `LU ${luNo.padStart(4, '0')}-${year}` : null
 }
 
 // "…Council Districts 14 and 15." / "…Council District 10." → ['14', '15'] / ['10']
@@ -93,7 +114,13 @@ function latestDate(...dates: (string | null | undefined)[]): string | null {
   return valid.length ? valid.reduce((a, b) => (a > b ? a : b)) : null
 }
 
-export function toContentItem(row: LegistarContentRow, now: Date = new Date()): NormalizedItem | null {
+// landUseTitles: LU file number → title, for placing Land Use resolutions whose
+// own title names no district
+export function toContentItem(
+  row: LegistarContentRow,
+  now: Date = new Date(),
+  landUseTitles: Map<string, string> = new Map()
+): NormalizedItem | null {
   const itemType = classify(row)
   if (!itemType || !row.legistar_url) return null
 
@@ -108,14 +135,22 @@ export function toContentItem(row: LegistarContentRow, now: Date = new Date()): 
   const stage = mapStage(row.status, !!nextEventAt)
   if (!stage) console.warn(`[nyc-legistar] unmapped status "${row.status}" on ${row.file_number}`)
 
-  const isLandUse = itemType === 'project'
+  const isLandUse = itemType === 'project' || isLandUseResolution(row)
   const primary = row.sponsorships.find((s) => s.is_primary)
 
-  // Land Use items live in the neighborhood banners, placed by the districts
-  // named in their title. Their listed sponsor is the subcommittee chair, not
-  // the local member, so no people are attached.
+  // Land Use items and resolutions live in the neighborhood banners, placed by
+  // the districts named in their title (a resolution falls back to its LU
+  // item's title). Their listed sponsor is the committee chair, not the local
+  // member, so no people are attached.
+  let landUseDistricts: string[] = []
+  if (isLandUse) {
+    landUseDistricts = parseCouncilDistricts(row.title)
+    const linked = itemType === 'resolution' && !landUseDistricts.length ? linkedLandUseFile(row) : null
+    if (linked) landUseDistricts = parseCouncilDistricts(landUseTitles.get(linked) ?? '')
+  }
+
   const places: NormalizedItem['places'] = isLandUse
-    ? parseCouncilDistricts(row.title).map((id) => ({ type: 'council_district' as const, id }))
+    ? landUseDistricts.map((id) => ({ type: 'council_district' as const, id }))
     : [
         { type: 'city' as const, id: 'nyc' },
         ...(primary?.legislators?.district
@@ -158,13 +193,36 @@ const SELECT = `
   id, slug, file_number, title, status, type, intro_date, last_action_date,
   ai_summary, official_summary, legistar_url,
   sponsorships(is_primary, legislators(legistar_id, district)),
+  committee_id,
   legislation_topics(topics(slug)),
   legislation_history(action_date),
   events(event_date)
 `
 
+async function loadLandUseTitles(supabase: SupabaseClient): Promise<Map<string, string>> {
+  const titles = new Map<string, string>()
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase
+      .from('legislation')
+      .select('file_number, title')
+      .like('file_number', 'LU %')
+      .order('file_number')
+      .range(from, from + 999)
+    if (error) throw new Error(`[nyc-legistar] Land Use titles read failed: ${error.message}`)
+    for (const r of data ?? []) titles.set(r.file_number, r.title)
+    if (!data || data.length < 1000) return titles
+  }
+}
+
+async function loadCommitteeNames(supabase: SupabaseClient): Promise<Map<string, string>> {
+  const { data, error } = await supabase.from('committees').select('id, name')
+  if (error) throw new Error(`[nyc-legistar] committees read failed: ${error.message}`)
+  return new Map((data ?? []).map((c) => [c.id as string, c.name as string]))
+}
+
 export function createNycLegistarAdapter(supabase: SupabaseClient): SourceAdapter<LegistarContentRow> {
   const now = new Date()
+  let landUseTitles = new Map<string, string>()
 
   return {
     slug: 'nyc-legistar',
@@ -173,6 +231,8 @@ export function createNycLegistarAdapter(supabase: SupabaseClient): SourceAdapte
     // sponsors and history change without touching it. The runner skips
     // unchanged items by hash, so `since` is ignored here.
     async *fetchChanged() {
+      landUseTitles = await loadLandUseTitles(supabase)
+      const committeeNames = await loadCommitteeNames(supabase)
       let cursor = '00000000-0000-0000-0000-000000000000'
       for (;;) {
         const { data, error } = await supabase
@@ -187,12 +247,16 @@ export function createNycLegistarAdapter(supabase: SupabaseClient): SourceAdapte
 
         if (error) throw new Error(`[nyc-legistar] legislation read failed: ${error.message}`)
         const rows = (data ?? []) as unknown as LegistarContentRow[]
+        for (const r of rows) {
+          const name = r.committee_id ? committeeNames.get(r.committee_id) : undefined
+          r.committees = name ? { name } : null
+        }
         yield* rows
         if (rows.length < PAGE_SIZE) return
         cursor = rows[rows.length - 1].id
       }
     },
 
-    toContentItem: (row) => toContentItem(row, now),
+    toContentItem: (row) => toContentItem(row, now, landUseTitles),
   }
 }

@@ -259,8 +259,8 @@ describe('rankActivePoliticians (§6.7)', () => {
 
   it('scores bills introduced, upcoming hearings and recent actions, with a reason line', () => {
     const items = new Map([
-      ['a', { primary: [1, 2, 3, 4].map(() => ({ introducedAt: daysAgo(5), nextEventAt: null, lastActivityAt: daysAgo(5) })), cosponsored: [] }],
-      ['b', { primary: [{ introducedAt: daysAgo(200), nextEventAt: '2026-11-26T15:00:00Z', lastActivityAt: daysAgo(40) }], cosponsored: [] }],
+      ['a', { primary: [1, 2, 3, 4].map(() => ({ itemType: 'bill', introducedAt: daysAgo(5), nextEventAt: null, lastActivityAt: daysAgo(5) })), cosponsored: [] }],
+      ['b', { primary: [{ itemType: 'bill', introducedAt: daysAgo(200), nextEventAt: '2026-11-26T15:00:00Z', lastActivityAt: daysAgo(40) }], cosponsored: [] }],
       ['c', { primary: [], cosponsored: [] }],
     ])
     const ranked = rankActivePoliticians(legislators, items, config, NOW)
@@ -269,6 +269,19 @@ describe('rankActivePoliticians (§6.7)', () => {
       ['b', 35, 'Hearing on Thursday'],
       ['c', 0, null],
     ])
+  })
+
+  it('counts bills and resolutions as introduced, worded by what was filed', () => {
+    const filed = (itemType: string) => ({ itemType, introducedAt: daysAgo(3), nextEventAt: null, lastActivityAt: daysAgo(3) })
+    const items = new Map([
+      ['a', { primary: [filed('bill'), filed('resolution')], cosponsored: [] }],
+      ['b', { primary: [filed('resolution')], cosponsored: [] }],
+      ['c', { primary: [filed('hearing')], cosponsored: [] }],
+    ])
+    const byId = new Map(rankActivePoliticians(legislators, items, config, NOW).map((p) => [p.legislatorId, p]))
+    expect(byId.get('a')!.reason).toBe('Introduced 2 bills and resolutions this month')
+    expect(byId.get('b')!.reason).toBe('Introduced 1 resolution this month')
+    expect(byId.get('c')!.counts.billsIntroduced).toBe(0)
   })
 
   it('interleaves bodies and caps the list', () => {
