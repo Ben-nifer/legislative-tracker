@@ -57,3 +57,10 @@ export const eventsRateLimit = new Ratelimit({
   limiter: Ratelimit.slidingWindow(600, '1 h'),
   prefix: 'rl:events',
 })
+
+// Feed loads (/api/feed): the onboarding preview refreshes on every toggle. Keyed by IP.
+export const feedRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(600, '1 h'),
+  prefix: 'rl:feed',
+})
