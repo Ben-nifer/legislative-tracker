@@ -1,6 +1,6 @@
 # Recommendations Plan — Content Layer, Embeddings & Feed Ranking
 
-**Status:** Draft v1.0 · 2026-11-21 · Built from product-owner interview answers.
+**Status:** Draft v1.1 · 2026-11-22 · Built from product-owner interview answers and a review of the onboarding mockup (Claude design canvas "Civic App Onboarding": iPhone clickable flow + web split view).
 **Builds on:** `onboarding-spec.md` v1.1 (§6 live preview, §7 content & ranking).
 **Scope:** The data layer, embeddings pipeline and ranking engine behind the onboarding live preview and the home-feed widgets.
 
@@ -26,6 +26,13 @@
 | D12 | Home page | The home page is made of **widgets** (Top for you, banners, Tracked, Trending, Friend activity…). This plan builds the **engine plus a fixed default layout**. The widget customization UI gets its own plan. **[DECIDED]** |
 | D13 | Interest matching | **Keep the existing flat topics.** Free-text interests ("high-speed rail") match **directly against item embeddings**. No curated topic graph or aliases. *Supersedes spec §7.2 items 1, 3a, 3d and 4.* **[DECIDED]** |
 | D14 | Guests | **Personalized, session-based.** The feed is scored from onboarding answers held in the session, and nothing persists until sign-up. **[DECIDED]** |
+| D15 | Starting weights | §6.2 weights approved as a starting point. **[DECIDED]** |
+| D16 | Weight tuning | Weights are editable from an **admin weights editor** with preview, versioning and rollback (§8). **[DECIDED]** |
+| D17 | Impression logging | **Log every feed impression and click** with its score breakdown and weights version (§3.5). **[DECIDED]** |
+| D18 | Related topics for free text | Typed phrases match items directly. The closest existing topics are shown as **tap-to-add suggestions** ("+ Transit"), **never auto-added** (§5.3). *Adjusts the mockup, which auto-adds them.* **[DECIDED]** |
+| D19 | "Top for you" strip | **Keep it** on the home page, even though the mockup's final page is banners only. The mockup gets updated later. **[DECIDED]** |
+| D20 | S3 politician ranking | The **"Active in your jurisdictions"** list in onboarding S3 is **in this plan** (§6.5). **[DECIDED]** |
+| D21 | Banners from follows | Following a politician **adds a banner for their level**, holding only their items, even if that jurisdiction wasn't selected. *From the mockup.* **[DECIDED]** |
 
 ---
 
@@ -117,6 +124,11 @@ Indexes: `(source_id, external_id)` unique; `(jurisdiction_level, last_activity_
 
 Index: HNSW, `vector_cosine_ops`, on the active model's rows.
 
+**`topic_embeddings`**: one vector per existing flat topic (about 20 rows), built from `name` plus a one-line description. Used only to suggest related topics for a typed phrase (§5.3). It's re-embedded when a topic is added or renamed.
+| Column | Notes |
+|---|---|
+| `topic_id` + `model` (PK), `embedding vector(1024)`, `embedded_at` | No index needed at this size |
+
 **`interest_phrases`**: a cache, so each distinct phrase is embedded only once across all users.
 | Column | Notes |
 |---|---|
@@ -136,7 +148,30 @@ RLS: users read/write only their own rows. `content_*` tables are public-read an
 
 ### 3.4 Ranking config
 
-**`ranking_config`**: `version` (PK), `weights` jsonb, `params` jsonb, `active` bool, `created_at`. Weights can be tuned without a deploy, and every feed response records which version scored it.
+**`ranking_config`**: `version` (PK), `weights` jsonb, `params` jsonb, `active` bool, `note` text, `created_by` uuid, `created_at`. Exactly one row is active. Weights can be tuned without a deploy (§8), and every feed response records which version scored it.
+
+### 3.5 Impression & click logging (D17)
+
+**`feed_impressions`**
+| Column | Notes |
+|---|---|
+| `id` | bigserial PK |
+| `user_id` | uuid null (signed-in users) |
+| `session_id` | text: random ID per browser session; the only identifier for guests. **No address, IP or device data** |
+| `surface` | `onboarding_preview` \| `home` |
+| `widget` | e.g. `top_for_you`, `jurisdiction:city` |
+| `content_item_id`, `position` | What was shown, and where |
+| `score`, `signals` jsonb | The total and the per-signal points, e.g. `{"place":20,"interest":14.2,…}` |
+| `reason` | The tag shown |
+| `config_version` | Which weights produced it |
+| `created_at` | |
+
+**`feed_clicks`**: `impression_id` FK, `action` (`open` \| `stance` \| `bookmark` \| `follow`), `created_at`.
+
+- Written in batches from the feed API (one insert per feed load, not per item).
+- Retention: 180 days, then rolled up into daily per-signal click-through aggregates.
+- On sign-up, the guest's `session_id` rows are linked to the new `user_id`.
+- Used for the "which signals lead to clicks" panel in §8. Nothing else reads it at request time.
 
 ---
 
@@ -224,7 +259,12 @@ Each adapter owns the mapping from its own status strings to these stages.
 2. On a miss: make **one** Voyage call with `input_type: "query"`, then store the vector.
 3. Run nearest-neighbor search over `content_embeddings`, **pre-filtered** to the user's jurisdictions and to `not is_dead`.
 4. Items above the similarity floor (§6.2) become candidates and are tagged **"Matches: high-speed rail"**.
-5. The preview shows the top matches as the adjacency feedback described in spec §S4 (e.g. *"high-speed rail → showing 6 bills incl. Amtrak funding"*). Removing an interest removes its matches.
+5. **Related-topic suggestions (D18):** compare the phrase vector against `topic_embeddings` (about 20 vectors, done in memory) and show the top 2–3 above a similarity floor as **tap-to-add** buttons:
+   ```
+   "high-speed rail" matched 6 items.   Related:  [+ Transit]  [+ Infrastructure]
+   ```
+   Tapping one adds it as a normal topic chip (`topic_follows`). Nothing is added without a tap (spec principle #2).
+6. Removing a typed interest removes its matched items from the feed.
 
 This meets the spec §14 criteria: **chip taps make 0 model calls, and free-text makes at most 1 embedding call and 0 LLM calls.**
 
@@ -259,7 +299,7 @@ Guests have no friends or history, so those signals are 0.
 | Items friends acted on in the last 14 days | 50 |
 | Top trending per followed jurisdiction | 50 |
 
-### 6.2 Signals and starting weights **[PROPOSED]**
+### 6.2 Signals and starting weights **[DECIDED: D15]**
 
 Every signal is normalized to 0–1. Weights sum to 100 so a score reads as "out of 100."
 
@@ -294,8 +334,31 @@ Spec §6 requires a provenance tag on every item. The reason shown is the **sign
 | Timeliness | "Hearing Thursday" |
 | Friends' activity | "3 people you follow weighed in" |
 | Popularity | "Trending in NYC" |
+| No strong signal (fallback) | "Top in New York City" / "Popular right now" (Popular feed) |
 
-### 6.5 Popular feed (spec §7.3)
+Politician tags use the office when the politician is the user's own representative ("Because you follow your Council Member"), and the name otherwise. In the onboarding preview, items that just appeared get a **"New ·"** prefix (from the mockup).
+
+### 6.5 Politician ranking for onboarding S3 (D20)
+
+A second, smaller ranking, of **people** instead of items, behind the S3 group "Active in your jurisdictions".
+
+- **Candidates:** active legislators in the user's selected jurisdictions (or all covered jurisdictions if none are selected, headed "Active in New York"), **excluding** the user's own representatives, who already appear in the "Your representatives" group.
+- **Activity score** (0–100), computed from `content_items` + `content_item_people`, refreshed with the 15-minute stats cron:
+  | Signal | Weight | Computation |
+  |---|---|---|
+  | Bills introduced (30 days) | 40 | Primary sponsorships, log-scaled, as a percentile within the same body |
+  | Upcoming votes/hearings (14 days) | 35 | Items they sponsor with `next_event_at` in the window |
+  | Recent actions (30 days) | 25 | Any `last_activity_at` on items they're attached to |
+
+  News volume (spec §S3) is added once a news adapter exists.
+- **Reason line** = the strongest signal: "Introduced 4 bills this month", "Vote on Thursday", "Sponsor of a bill in committee".
+- **Cap:** 8, plus "See more".
+- **Neutrality:** party is never read (same unit test as §6.2). Legislative bodies are interleaved, so one body can't fill the list.
+- **Audit:** a monthly admin report compares the party mix of the top 8 with each body's actual party mix and flags large gaps for review. It doesn't auto-correct (spec §S3).
+- Endpoint: `GET /api/politicians/active?jurisdictions=…`, cached 15 minutes per jurisdiction set.
+- Weights live in the same `ranking_config` row under `politician_weights`.
+
+### 6.6 Popular feed (spec §7.3)
 
 The same engine with an empty context. Only timeliness, popularity and stage carry weight (renormalized), across the Federal / NY State / NYC banners.
 
@@ -316,17 +379,20 @@ It runs one candidate-and-score pass and slices the results into each requested 
 | Widget | Source of items | Default size |
 |---|---|---|
 | `top_for_you` | Highest scores across all levels | 5 |
-| `jurisdiction:{level}` / `place:{type}:{id}` | Scored items in that jurisdiction or place, **excluding items already in Top for you** | 5 + "See all" |
+| `jurisdiction:{level}` / `place:{type}:{id}` | Scored items in that jurisdiction or place, **excluding items already in Top for you**. A level the user didn't select but follows a politician in gets a banner with **only that politician's items** (D21) | 5 + "See all" (3 in the onboarding preview) |
 | `tracked` | User's followed legislation, ordered by next event, then last activity | 5 |
 | `trending` | Popularity-only ranking | 5 |
 | `friend_activity` | Items friends acted on, ordered by recency | 5 |
 
 **Default layout** (until the customization UI exists): Top for you → followed jurisdiction banners (Federal → State → City → Neighborhood) → Tracked → Trending → Friend activity.
 
+**Onboarding preview layout** (from the mockup): banners only, 3 items each. On mobile, the peek card shows the top 2 items across all banners plus the total count.
+
 ### 7.3 Endpoints
 
-- `POST /api/feed`: body `{ widgets, guestContext? }`. Signed-in users' context is loaded server-side. Guests send their session context, validated with zod; **no address data is accepted**.
-- `POST /api/interests/resolve`: phrase → cached/embedded vector key + top matches, for onboarding S4.
+- `POST /api/feed`: body `{ widgets, guestContext?, previousItemIds? }`. Signed-in users' context is loaded server-side. Guests send their session context, validated with zod; **no address data is accepted**. The response includes, per widget, the items, their reasons, which are **new** compared with `previousItemIds`, and counts. That's what drives the preview's "Added 3 items from New York City · 6 items" live-region text and the "New ·" tags.
+- `POST /api/interests/resolve`: phrase → cached/embedded vector key, top matching items, and 2–3 related-topic suggestions, for onboarding S4.
+- `GET /api/politicians/active`: S3 list (§6.5).
 
 ### 7.4 Caching & performance
 
@@ -340,7 +406,15 @@ It runs one candidate-and-score pass and slices the results into each requested 
 
 ## 8. Admin tooling
 
-- **Ranking inspector** (`/admin/ranking`): pick a user or a fixture persona to see their feed with each item's per-signal point breakdown. This is how the weights get tuned, since there's no learned model.
+- **Ranking inspector** (`/admin/ranking`): pick a user or a fixture persona to see their feed with each item's per-signal point breakdown.
+- **Weights editor** (`/admin/ranking/weights`, D16):
+  - One slider per signal (§6.2), plus the staleness multiplier, staleness window, similarity floor/ceiling, sponsor cap, and the §6.5 politician weights.
+  - **Preview before saving:** the 5 fixture personas' top-10 feeds, current vs. proposed, side by side, with items that moved highlighted.
+  - **Save** creates a new `ranking_config` version with a required note ("Boost timeliness for budget season"). Older versions stay.
+  - **Rollback:** make any earlier version active in one click.
+  - Changes reach users within the 10-minute feed cache. The cache key includes the version, so no manual flush is needed.
+  - **Signal performance panel:** click-through rate by top signal and by widget, from `feed_impressions` / `feed_clicks` (§3.5), filterable by weights version. This shows whether a change helped.
+  - Admin-only (existing `is_admin` flag).
 - **Similarity calibration view:** for a typed phrase, list nearest items with their cosine scores to set the floor and ceiling in §6.2.
 - **Source health:** last sync time, items ingested, items awaiting embedding, and error counts per source.
 
@@ -365,9 +439,9 @@ It runs one candidate-and-score pass and slices the results into each requested 
 | **0. Setup** | Voyage API key stored as a secret; `pgvector` enabled in Supabase; `api.voyageai.com` allowed on the network | — |
 | **1. Content layer** | Migration `014`; adapter contract + runner; Legistar adapter; backfill | 0 |
 | **2. Embeddings** | Embed cron; backfill; `interest_phrases` cache; `/api/interests/resolve` | 1 |
-| **3. Ranking engine** | `feed_candidates`; scorer; sponsor cap; reasons; `ranking_config`; persona tests | 2 |
-| **4. Feed & widgets** | `getFeed`, `/api/feed`, default widget layout on the home page, guest context, Popular fallback, onboarding preview wiring | 3 + onboarding UI |
-| **5. Tuning** | Ranking inspector, calibration view, source health; set the similarity floor/ceiling from real data | 4 |
+| **3. Ranking engine** | `feed_candidates`; scorer; sponsor cap; reasons; `ranking_config`; S3 politician ranking (§6.5); persona tests | 2 |
+| **4. Feed & widgets** | `getFeed`, `/api/feed` (with new-item diff), default widget layout incl. Top for you, guest context, Popular fallback, onboarding preview wiring, related-topic suggestions, impression/click logging | 3 + onboarding UI |
+| **5. Tuning** | Ranking inspector, **weights editor**, signal performance panel, calibration view, source health, party-mix audit for S3; set the similarity floor/ceiling from real data | 4 |
 
 ---
 
@@ -378,7 +452,8 @@ It runs one candidate-and-score pass and slices the results into each requested 
 | §2 Geography | "All 50 states at launch" → **NYC first; other states via adapters later** (D5) |
 | §7.2 items 1, 3a, 3d, 4 | Curated topic graph, alias cache and curation workstream → **replaced by direct embedding match against items** (D13). Flat topics remain for chips. **Q7 (topic owner) is no longer a launch blocker** |
 | §7.2 item 5 | Vector store decided: **pgvector in Supabase**, embeddings from **Voyage AI** |
-| §S3 "Active in…" politician suggestions | Depends on a politician activity score that isn't in this plan → **[OPEN] Q3** |
+| §S3 "Active in…" politician suggestions | Activity score defined in §6.5 (news volume added once a news adapter exists) |
+| §S4 adjacency feedback | Related topics are **tap-to-add suggestions**, not auto-added (D18) |
 
 ---
 
@@ -386,13 +461,13 @@ It runs one candidate-and-score pass and slices the results into each requested 
 
 | # | Question | Why it matters |
 |---|---|---|
-| Q1 | Review the Claude-artifact onboarding mockup and reconcile it with §6–7 | Widget sizes, provenance tag copy and preview behavior should match the design |
-| Q2 | Approve or adjust the starting weights in §6.2 | They set the feel of the whole feed |
-| Q3 | Is the S3 "Active in [jurisdictions]" politician ranking part of this plan or the suggestion-cards phase? | Onboarding S3 needs it at launch per the spec |
+| ~~Q1~~ | ~~Review the onboarding mockup~~ **Resolved 2026-11-22:** reviewed; changes captured in D18, D19, D21, §6.4 and §7.2–7.3 | — |
+| ~~Q2~~ | ~~Starting weights~~ **Resolved:** approved (D15), tunable via the weights editor (D16) | — |
+| ~~Q3~~ | ~~S3 politician ranking~~ **Resolved:** in this plan (D20, §6.5) | — |
 | Q4 | Similarity floor/ceiling values | Need real embeddings to calibrate (Phase 5) |
-| Q5 | Should we log feed impressions anyway? | Not needed for a formula, but it's cheap and would let you measure click-through by signal and keeps a future ML option open |
-
----
+| ~~Q5~~ | ~~Log impressions?~~ **Resolved:** yes (D17, §3.5) | — |
+| Q6 | Update the mockup: add the "Top for you" strip to the final page, and switch related topics to tap-to-add | Keeps the design and the plan in sync |
+| Q7 | The mockup's in-feed card suggests "Follow Brooklyn **Borough** projects?", but spec §3 says boroughs aren't followable | Resolve when suggestion cards are planned (phase 2) |
 
 ## 13. Housekeeping
 
