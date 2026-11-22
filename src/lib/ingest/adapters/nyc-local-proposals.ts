@@ -4,8 +4,10 @@ import type { NormalizedItem, SourceAdapter, Stage } from '../types'
 // Neighborhood adapter (onboarding-build-planv1.1.md §4.8, B12): serves the
 // kept DOT/ULURP rows in `local_proposals` as neighborhood content items,
 // tagged to the NTA 2020 neighborhoods their geometry intersects. It never
-// calls ZAP or the DOT dataset; keeping local_proposals fresh is out of scope
-// (build plan Q3). NTA matching runs in SQL (local_proposal_rows, migration 027).
+// calls ZAP or the DOT dataset: the sync-ulurp / sync-dot-projects crons keep
+// local_proposals fresh. NTA matching runs in SQL (local_proposal_rows, migration 027).
+// A ZAP proposal linked to a Council Land Use item (land_use_locations) is
+// folded into that item and not emitted (recommendations plan Q8).
 
 const PAGE_SIZE = 500
 
@@ -96,7 +98,15 @@ function latestDate(...dates: (string | null | undefined)[]): string | null {
   return valid.length ? valid.reduce((a, b) => (a > b ? a : b)) : null
 }
 
-export function toContentItem(row: LocalProposalRow, now: Date = new Date()): NormalizedItem | null {
+// ZAP project IDs appear with and without a leading P
+export const zapProjectId = (id: string) => id.replace(/^P/, '')
+
+export function toContentItem(
+  row: LocalProposalRow,
+  now: Date = new Date(),
+  linkedZapProjects: Set<string> = new Set()
+): NormalizedItem | null {
+  if (row.source === 'zap_ulurp' && linkedZapProjects.has(zapProjectId(row.source_id))) return null
   const title = nonEmpty(row.title)
   if (!title) return null
 
@@ -145,8 +155,15 @@ export function toContentItem(row: LocalProposalRow, now: Date = new Date()): No
   }
 }
 
+async function loadLinkedZapProjects(supabase: SupabaseClient): Promise<Set<string>> {
+  const { data, error } = await supabase.from('land_use_locations').select('zap_project_id').not('zap_project_id', 'is', null)
+  if (error) throw new Error(`[nyc-local-proposals] land_use_locations read failed: ${error.message}`)
+  return new Set((data ?? []).map((r) => zapProjectId(r.zap_project_id as string)))
+}
+
 export function createNycLocalProposalsAdapter(supabase: SupabaseClient): SourceAdapter<LocalProposalRow> {
   const now = new Date()
+  let linked = new Set<string>()
 
   return {
     slug: 'nyc-local-proposals',
@@ -155,6 +172,7 @@ export function createNycLocalProposalsAdapter(supabase: SupabaseClient): Source
     fullScan: true,
 
     async *fetchChanged() {
+      linked = await loadLinkedZapProjects(supabase)
       let after: string | null = null
       for (;;) {
         const { data, error } = await supabase.rpc('local_proposal_rows', { p_after: after, p_limit: PAGE_SIZE })
@@ -166,6 +184,6 @@ export function createNycLocalProposalsAdapter(supabase: SupabaseClient): Source
       }
     },
 
-    toContentItem: (row) => toContentItem(row, now),
+    toContentItem: (row) => toContentItem(row, now, linked),
   }
 }

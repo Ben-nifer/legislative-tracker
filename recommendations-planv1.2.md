@@ -497,7 +497,7 @@ It derives the user's widget list from their follows (or the guest session), rea
 | ~~Q5~~ | ~~Log impressions?~~ **Resolved:** yes (D17, §3.5) | — |
 | Q6 | Update the mockup: switch related topics to tap-to-add; show topic and politician widgets on S6 (no "Top for you", D23) | Keeps the design and the plan in sync |
 | Q7 | The mockup's in-feed card suggests "Follow Brooklyn **Borough** projects?", but spec §3 says boroughs aren't followable | Resolve when suggestion cards are planned (phase 2) |
-| Q8 | Council Land Use items (`project`, neighborhood level) cover the same ULURP applications as `local_proposals` (from `feature/neighborhood-map`, already in the live DB). Link, merge or replace them so the neighborhood banner doesn't show duplicates | Decide before Phase 3 |
+| ~~Q8~~ | ~~Land Use items vs `local_proposals`~~ **Resolved 2026-11-22:** linked; the proposal folds into its Land Use item (build plan §13, B3) | — |
 
 | Q9 | Which news source for importance: GDELT (free, global, measures share of coverage, noisy matching) or NYC outlets' feeds (THE CITY, Gothamist, City & State, Politico NY), matched by bill number/title? | Decides Phase 6 |
 | Q10 | NYC eLobbyist open data: confirm how bill numbers appear in the dataset before building the adapter | Decides Phase 6 |

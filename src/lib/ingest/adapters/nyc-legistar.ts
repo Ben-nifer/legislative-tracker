@@ -137,6 +137,7 @@ export interface AdapterContext {
   landUseDecisions: Map<string, LandUseDecision> // LU file number → its Council decision
   jointHearings: Map<string, JointHearing> // any member's file number → its group
   mayoralActors: Map<string, string[]> // legislation ID → external IDs of mayors who acted on it
+  landUseLocations: Map<string, { ntaCodes: string[]; zapProjectId: string | null }> // LU file number → land_use_locations
 }
 
 export const emptyContext = (): AdapterContext => ({
@@ -144,6 +145,7 @@ export const emptyContext = (): AdapterContext => ({
   landUseDecisions: new Map(),
   jointHearings: new Map(),
   mayoralActors: new Map(),
+  landUseLocations: new Map(),
 })
 
 // Manual officials (build plan B10) are attached by "manual:<slug>" IDs
@@ -291,8 +293,13 @@ export function toContentItem(
     if (linked) landUseDistricts = parseCouncilDistricts(ctx.landUseTitles.get(linked) ?? '')
   }
 
+  // An LU item's own location (its tax lots or address) puts it in neighborhood widgets
+  const location = itemType === 'project' ? ctx.landUseLocations.get(row.file_number) : undefined
   const places: NormalizedItem['places'] = isLandUse
-    ? landUseDistricts.map((id) => ({ type: 'council_district' as const, id }))
+    ? [
+        ...landUseDistricts.map((id) => ({ type: 'council_district' as const, id })),
+        ...(location?.ntaCodes ?? []).map((id) => ({ type: 'neighborhood' as const, id })),
+      ]
     : [
         { type: 'city' as const, id: 'nyc' },
         ...(primary?.legislators?.district
@@ -334,6 +341,10 @@ export function toContentItem(
       file_number: row.file_number,
       slug: row.slug,
       ...(decision ? { council_decision: decision } : {}),
+      // Its ZAP proposal is folded into this item (recommendations plan Q8)
+      ...(location?.zapProjectId
+        ? { zap: { project_id: location.zapProjectId, url: `https://zap.planning.nyc.gov/projects/${location.zapProjectId}` } }
+        : {}),
       ...(itemType === 'hearing'
         ? {
             committees: joint?.committees ?? (row.committees ? [row.committees.name] : []),
@@ -406,7 +417,20 @@ async function loadContext(supabase: SupabaseClient, committeeNames: Map<string,
     landUseDecisions: buildLandUseDecisions(resolutions.map(withCommittee), landUseTitles),
     jointHearings: buildJointHearings(hearings.map(withCommittee)),
     mayoralActors: await loadMayoralActors(supabase),
+    landUseLocations: await loadLandUseLocations(supabase),
   }
+}
+
+async function loadLandUseLocations(supabase: SupabaseClient): Promise<AdapterContext['landUseLocations']> {
+  const rows = await readAll<{ file_number: string; nta_codes: string[]; zap_project_id: string | null }>(
+    'Land Use locations',
+    (from, to) => supabase.from('land_use_locations').select('file_number, nta_codes, zap_project_id').order('file_number').range(from, to)
+  ).catch((err) => {
+    // Before migration 027 there's no table; Land Use items keep their council districts only
+    console.warn(err instanceof Error ? err.message : err)
+    return []
+  })
+  return new Map(rows.map((r) => [r.file_number, { ntaCodes: r.nta_codes ?? [], zapProjectId: r.zap_project_id }]))
 }
 
 async function loadMayoralActors(supabase: SupabaseClient): Promise<Map<string, string[]>> {

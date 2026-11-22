@@ -102,9 +102,21 @@ interface ResolvedRow {
   ingest_hash: string
 }
 
+// Land Use applications and neighborhood projects with no activity in the
+// last 12 months leave every widget (product decision 2026-11-22). They're
+// marked dead rather than deleted, so new activity brings them back on the
+// next run. Every adapter here re-emits its whole source each run, so items
+// age out without changing.
+export const PROJECT_STALE_DAYS = 365
+
+export function isStaleProject(item: Pick<NormalizedItem, 'itemType' | 'lastActivityAt'>, now: Date): boolean {
+  return item.itemType === 'project' && now.getTime() - new Date(item.lastActivityAt).getTime() > PROJECT_STALE_DAYS * 86_400_000
+}
+
 export function resolveItem(
   item: NormalizedItem,
-  lookups: Lookups
+  lookups: Lookups,
+  now: Date = new Date()
 ): { row: ResolvedRow; unresolvedPeople: number; unresolvedTopics: number } {
   const legislatureId = item.legislatureSlug
     ? (lookups.legislatureIdBySlug.get(item.legislatureSlug) ?? null)
@@ -139,7 +151,7 @@ export function resolveItem(
     introduced_at: item.introducedAt ?? null,
     last_activity_at: item.lastActivityAt,
     next_event_at: item.nextEventAt ?? null,
-    is_dead: item.isDead,
+    is_dead: item.isDead || isStaleProject(item, now),
     legislation_id: item.legislationId ?? null,
     metadata: item.metadata ?? {},
     places: item.places,
@@ -254,7 +266,7 @@ export async function runIngest<Raw>(
     }
     seenIds.add(item.externalId)
 
-    const { row, unresolvedPeople, unresolvedTopics } = resolveItem(item, lookups)
+    const { row, unresolvedPeople, unresolvedTopics } = resolveItem(item, lookups, startedAt)
     result.unresolvedPeople += unresolvedPeople
     result.unresolvedTopics += unresolvedTopics
     batch.push(row)

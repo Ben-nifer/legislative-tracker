@@ -6,7 +6,8 @@ export type ZapProject = {
   project_brief?: string
   project_status?: string
   public_status?: string
-  ulurp_non?: string
+  ulurp_non?: string // review type: "ULURP" | "Non-ULURP" | "ELURP"
+  ulurp_numbers?: string // application numbers: "260190ZSX; N260191ZCX; …"
   actions?: string
   ceqr_type?: string
   ceqr_number?: string

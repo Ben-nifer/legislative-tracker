@@ -1,14 +1,19 @@
-// Loads the kept DOT/ULURP local_proposals into content_items as neighborhood
-// items (onboarding-build-planv1.1.md §4.8). Same job as the weekly
-// /api/cron/ingest-neighborhood; safe to re-run (unchanged items are skipped).
+// Neighborhood content (onboarding-build-planv1.1.md §4.8): resolves where each
+// Council Land Use item is (land_use_locations), re-ingests Legistar so Land
+// Use items pick up their neighborhoods and ZAP links, then loads the DOT/ULURP
+// local_proposals, folding linked ones away. The daily /api/cron/ingest-content
+// does the same for new items; safe to re-run (unchanged items are skipped).
 //
-//   npm run backfill:neighborhood
+//   npm run backfill:neighborhood           # Land Use items without a location yet
+//   npm run backfill:neighborhood -- --all  # re-resolve every Land Use item
 //
-// Requires migration 027 and the `nyc-local-proposals` source to be enabled
-// (it ships disabled; the runner does nothing for a disabled source).
+// Requires migration 027. The proposals step needs the `nyc-local-proposals`
+// source enabled (it ships disabled; the runner does nothing for a disabled source).
 
 import { createClient } from '@supabase/supabase-js'
+import { createNycLegistarAdapter } from '../src/lib/ingest/adapters/nyc-legistar'
 import { createNycLocalProposalsAdapter } from '../src/lib/ingest/adapters/nyc-local-proposals'
+import { resolveLandUseLocations } from '../src/lib/ingest/land-use-locations'
 import { runIngest } from '../src/lib/ingest/run'
 
 async function main() {
@@ -19,10 +24,16 @@ async function main() {
   const supabase = createClient(url, key)
   const started = Date.now()
 
+  const located = await resolveLandUseLocations(supabase, { all: process.argv.includes('--all') })
+  console.log(`📍 Land Use locations: ${located.resolved} resolved`, located.byMethod)
+
+  const legistar = await runIngest(supabase, createNycLegistarAdapter(supabase))
+  console.log(`✅ ${legistar.source}: ${legistar.written} written, ${legistar.unchanged} unchanged, ${legistar.removed} removed`)
+
   const { data: source } = await supabase.from('sources').select('id, enabled').eq('slug', 'nyc-local-proposals').single()
   if (!source) throw new Error('Source nyc-local-proposals not found: apply migration 027 first')
   if (!source.enabled) {
-    console.warn('⚠️  nyc-local-proposals is disabled; nothing to do. Enable it in `sources` once Q8/Q5 are decided.')
+    console.warn('⚠️  nyc-local-proposals is disabled; nothing to do. Enable it in `sources` to load proposals.')
     return
   }
 

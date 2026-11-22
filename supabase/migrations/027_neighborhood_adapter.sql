@@ -5,9 +5,8 @@
 -- `nyc-local-proposals` source row. Additive only.
 --
 -- The source is created DISABLED: the runner skips disabled sources, so
--- nothing reaches content_items until the open questions are settled
--- (recommendations plan Q8: Land Use duplicates; build plan Q5: imprecise
--- proposals) and someone runs
+-- nothing reaches content_items until the land_use_locations backfill has run
+-- (so linked proposals fold into their Land Use items) and someone runs
 --   update sources set enabled = true where slug = 'nyc-local-proposals';
 --
 -- `local_proposals`, `local_proposal_history`, `ulurp_proposal_details` and
@@ -17,6 +16,57 @@
 -- if called there.
 -- Run in: Supabase Dashboard → SQL Editor → New Query
 -- ============================================================
+
+-- ============================================================
+-- ULURP application numbers
+-- The ZAP sync stored the review type ('ULURP' | 'Non-ULURP' | 'ELURP') in
+-- ulurp_numbers. It now goes in review_type, and ulurp_numbers holds the
+-- application numbers ("260190ZSX; N260191ZCX; …"), filled by the next sync.
+-- ============================================================
+
+alter table ulurp_proposal_details add column if not exists review_type text;
+
+update ulurp_proposal_details
+set review_type = ulurp_numbers, ulurp_numbers = null
+where ulurp_numbers in ('ULURP', 'Non-ULURP', 'ELURP');
+
+-- ============================================================
+-- LAND USE LOCATIONS
+-- Where each Council Land Use item is, resolved once from its title
+-- (src/lib/ingest/land-use-locations.ts): application number → ZAP project →
+-- its tax lots → PLUTO points; "Block 2109, Lot 17" → PLUTO; a sidewalk café's
+-- address → Geoclient. nta_codes place the item in neighborhood widgets, and
+-- zap_project_id links it to its ZAP proposal (recommendations plan Q8: the
+-- proposal is folded into the Land Use item).
+-- ============================================================
+
+create table if not exists land_use_locations (
+  file_number     text primary key,              -- legislation.file_number, "LU 0162-2026"
+  method          text not null check (method in ('zap', 'block_lot', 'address', 'none')),
+  zap_project_id  text,                          -- "2022X0393" (no P prefix)
+  bbls            text[] not null default '{}',
+  nta_codes       text[] not null default '{}',
+  resolved_at     timestamptz not null default now()
+);
+
+create index if not exists land_use_locations_zap_idx on land_use_locations (zap_project_id) where zap_project_id is not null;
+
+alter table land_use_locations enable row level security;
+
+-- NTA 2020 codes containing any of the points (lng/lat pairs, WGS84)
+create or replace function ntas_at_points(p_lngs double precision[], p_lats double precision[])
+returns text[]
+language sql
+stable
+set search_path = public, extensions
+as $$
+  select coalesce(array_agg(distinct n.nta_code order by n.nta_code), '{}'::text[])
+  from unnest(p_lngs, p_lats) as pt(lng, lat)
+  join neighborhoods n on ST_Contains(n.geometry, ST_SetSRID(ST_MakePoint(pt.lng, pt.lat), 4326));
+$$;
+
+revoke all on function ntas_at_points(double precision[], double precision[]) from public, anon, authenticated;
+grant execute on function ntas_at_points(double precision[], double precision[]) to service_role;
 
 -- One page of proposals in id order (keyset: pass the last id seen).
 -- nta_codes = every NTA 2020 code the geometry intersects, whatever its
@@ -68,7 +118,8 @@ begin
          h.milestone_text,
          case when u.local_proposal_id is null then null else jsonb_build_object(
            'actions', u.actions,
-           'review_type', u.ulurp_numbers,          -- 'ULURP' | 'Non-ULURP' (not application numbers)
+           'review_type', u.review_type,            -- 'ULURP' | 'Non-ULURP' | 'ELURP'
+           'ulurp_numbers', u.ulurp_numbers,        -- application numbers, "; "-separated
            'cc_district', u.cc_district,
            'applicant_name', u.applicant_name,
            'applicant_type', u.applicant_type,
@@ -103,7 +154,7 @@ revoke all on function local_proposal_rows(uuid, integer) from public, anon, aut
 grant execute on function local_proposal_rows(uuid, integer) to service_role;
 
 -- ============================================================
--- SOURCE (disabled until Q8 / Q5 are decided; see header)
+-- SOURCE (disabled until the backfill; see header)
 -- ============================================================
 
 insert into sources (slug, name, kind, enabled)

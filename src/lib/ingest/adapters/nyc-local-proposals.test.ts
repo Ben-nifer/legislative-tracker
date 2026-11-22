@@ -239,6 +239,7 @@ describe('createNycLocalProposalsAdapter', () => {
     ]
     const calls: unknown[] = []
     const supabase = {
+      from: () => ({ select: () => ({ not: async () => ({ data: [], error: null }) }) }),
       rpc: async (fn: string, args: unknown) => {
         calls.push({ fn, args })
         return { data: pages[calls.length - 1] ?? [], error: null }
@@ -259,11 +260,21 @@ describe('createNycLocalProposalsAdapter', () => {
 
   it('throws on a read error rather than emitting a partial catalog', async () => {
     const supabase = {
+      from: () => ({ select: () => ({ not: async () => ({ data: [], error: null }) }) }),
       rpc: async () => ({ data: null, error: { message: 'boom' } }),
     } as unknown as SupabaseClient
     const iterate = async () => {
       for await (const _row of createNycLocalProposalsAdapter(supabase).fetchChanged(null)) void _row
     }
     await expect(iterate()).rejects.toThrow(/boom/)
+  })
+})
+
+describe('linked proposals', () => {
+  it('folds a ZAP proposal linked to a Land Use item, whatever its P prefix', () => {
+    const linked = new Set(['2022X0393'])
+    expect(toContentItem(ulurp({ source_id: 'P2022X0393' }), NOW, linked)).toBeNull()
+    expect(toContentItem(ulurp({ source_id: '2022X0393' }), NOW, linked)).toBeNull()
+    expect(toContentItem(ulurp({ source_id: '2024M0243' }), NOW, linked)).not.toBeNull()
   })
 })

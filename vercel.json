@@ -25,10 +25,6 @@
       "schedule": "0 7 * * *"
     },
     {
-      "path": "/api/cron/ingest-neighborhood",
-      "schedule": "30 7 * * 1"
-    },
-    {
       "path": "/api/cron/embed-content",
       "schedule": "0 8 * * *"
     },

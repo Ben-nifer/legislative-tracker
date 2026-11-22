@@ -151,7 +151,6 @@ legislative-tracker/
 │   │   │   ├── cron/             # Vercel cron jobs
 │   │   │   │   ├── sync-legislation/
 │   │   │   │   ├── rank-widgets/     # Widget precompute (daily on Hobby; see vercel.json)
-│   │   │   │   ├── ingest-neighborhood/  # Weekly: local_proposals → content_items
 │   │   │   │   └── refresh-stats/
 │   │   │   └── ...
 │   │   ├── actions/              # Server Actions
@@ -215,6 +214,7 @@ legislative-tracker/
 │   │   │   ├── types.ts          # SourceAdapter / NormalizedItem contract
 │   │   │   ├── run.ts            # Shared runner: resolve IDs, hash, upsert
 │   │   │   ├── index.ts          # Registered adapters
+│   │   │   ├── land-use-locations.ts  # LU item → ZAP project / tax lots / address → NTAs
 │   │   │   └── adapters/
 │   │   │       ├── nyc-legistar.ts
 │   │   │       └── nyc-local-proposals.ts  # DOT/ULURP local_proposals → NTA-tagged items (build plan §4.8)
@@ -388,7 +388,7 @@ legislative-tracker/
 
 ## Cron schedule (Vercel Hobby)
 
-The project is on Vercel's **Hobby plan, which only allows daily crons**, so every job in `vercel.json` runs once a day (UTC, each an hour after what it depends on): sync-legislation 05:00 → summarize 06:00 → ingest-content 07:00 (plus ingest-neighborhood Mondays 07:30, weekly by design) → embed-content + refresh-stats 08:00 → send-digests 09:00 → rank-widgets 10:00. **When the project moves to Pro, restore the planned cadences:** refresh-stats `*/15`, sync-legislation `0 */2`, ingest-content `15 */2`, embed-content `30 */2`, rank-widgets `5-59/15`, summarize-legislation `0 1/2` (recommendations plan D9, §6.1).
+The project is on Vercel's **Hobby plan, which only allows daily crons**, so every job in `vercel.json` runs once a day (UTC, each an hour after what it depends on): sync-ulurp 04:00 + sync-dot-projects 04:30 → sync-legislation 05:00 → summarize 06:00 (summarize-proposals 06:30) → ingest-content 07:00 (Land Use locations, Legistar, then local proposals) → embed-content + refresh-stats 08:00 → send-digests 09:00 → rank-widgets 10:00. **When the project moves to Pro, restore the planned cadences:** refresh-stats `*/15`, sync-legislation `0 */2`, ingest-content `15 */2`, embed-content `30 */2`, rank-widgets `5-59/15`, summarize-legislation `0 1/2` (recommendations plan D9, §6.1).
 
 ---
 

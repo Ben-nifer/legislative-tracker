@@ -349,7 +349,7 @@ One short section per finished phase: what shipped, decisions made during the bu
 - The 7% of items without a headline show the long official title.
 - Mobile home page reuses the desktop header (wraps to two lines); the export only has a web S6.
 
-### Phase B3 — Neighborhood adapter (2026-11-22, built; migration not applied, source disabled)
+### Phase B3 — Neighborhood adapter (2026-11-22, built; migration 027 not applied yet)
 
 **Shipped:** migration `027_neighborhood_adapter.sql` (**written, not applied**): `local_proposal_rows(p_after, p_limit)`, a service-role read that pages `local_proposals` with the NTA codes its geometry intersects (`ST_Intersects` against `neighborhoods`), the latest history milestone and the ULURP/DOT detail rows; plus the `nyc-local-proposals` source row, **created disabled**. `src/lib/ingest/adapters/nyc-local-proposals.ts` maps rows per §4.8. `src/lib/ingest/index.ts` now groups adapters by cron: `ingestAllSources` (daily, Legistar) and `ingestNeighborhoodSources` (weekly). `/api/cron/ingest-neighborhood` on Mondays 07:30 UTC (after ingest-content, before embed-content and rank-widgets). `npm run backfill:neighborhood`. 17 new tests (145 total). Nothing in the feed, ranking or coverage code changed: `coverage_levels()` and the precompute's per-NTA widgets pick the items up as soon as they exist.
 
@@ -364,13 +364,16 @@ One short section per finished phase: what shipped, decisions made during the bu
 
 **Live data (read-only, 2026-11-22):** 1,575 proposals. ZAP ULURP 1,391 (136 precise, all point geometry, each in 1 NTA; 1,255 at the district-centroid fallback); DOT 184 lines, 23 crossing 2–3 NTAs, **all `geometry_precise = false`**, and all completed projects from 2015–2025. Neighborhoods reached: 65 NTAs with precise-only (57 counting only open reviews, 101 items), 148 if DOT counts as precise, 155 if everything is tagged. Only 25 rows have an `ai_summary`.
 
-**Left open (need product-owner decisions):**
-- **Q8 (recs plan):** Land Use items vs `local_proposals`. A rough title match finds 167 proposals (32 precise) with a matching Council LU item, out of 919 LU items. `ulurp_proposal_details.ulurp_numbers` holds only "ULURP"/"Non-ULURP", not application numbers, so linking needs name matching or a new ZAP field. Today LU items carry council districts only, so they don't appear in neighborhood widgets and there are no duplicates *there* yet; they would duplicate in topic/interest widgets.
-- **Q5 remainder:** exclude imprecise proposals from neighborhoods (built), or tag them some other way (e.g. to every NTA in their community district).
-- **DOT precision:** migration 019 says "DOT rows always have real source geometry", but the flag was left at its default (false). Either set `geometry_precise = true` for DOT rows in `local_proposals` or treat DOT as precise in the adapter; otherwise no DOT item reaches a neighborhood. Also whether 2015–2025 completed DOT projects belong in the feed at all.
-- **Q3:** who refreshes `local_proposals` (no sync on this branch; data ends mid-2026).
-- **District → NTA crosswalk** for Land Use items (Phase 3 note): depends on Q8.
-- After approval: apply 027, enable the source, run `backfill:neighborhood`, then `backfill:embeddings` (or wait for the cron) and `rank:widgets`. Neighborhood then shows as live in `getCoverage()`.
+**Product-owner decisions (2026-11-22), built the same day:**
+- **Q8 → link.** A Council Land Use item and its ZAP proposal are one item: the **Land Use item** (in-app page, comments, Council vote) carries `metadata.zap` and the proposal's location; the proposal isn't emitted. Matched by application number ("C 260193 HAX" in the LU title ↔ ZAP `ulurp_numbers` "260193HAX"), else by the exact project name when one ZAP project has it. The ZAP sync stored the review type in `ulurp_numbers`; it now goes in `review_type` and `ulurp_numbers` holds the numbers (migration 027 moves the old values).
+- **Land Use items are placed by their own location** (`src/lib/ingest/land-use-locations.ts`, table `land_use_locations`): ZAP project → its tax lots (ZAP BBL dataset) → PLUTO points → NTAs; "Block 2109, Lot 17, Manhattan" → PLUTO; sidewalk cafés' "located at … NY 10019" → Geoclient. Resolved once per item, before each daily ingest. This replaces the district → NTA crosswalk. Dry run on the 207 active LU items: 193 placed by tax lots, 9 cafés by address, 5 unplaced (a citywide text amendment, a concession, condo lots missing from PLUTO); 65 proposals fold into an active LU item.
+- **Land Use is local:** neighborhood widgets, not New York City (already true: `jurisdiction_level = neighborhood`), and topic/interest widgets when relevant (they rank across all levels).
+- **Q5 remainder → keep imprecise proposals out of neighborhoods** (as built).
+- **No stale projects:** Land Use items and proposals with no activity in **the last 12 months** (rolling) leave every widget. The runner marks `item_type = 'project'` items older than that `is_dead` (`isStaleProject`, `PROJECT_STALE_DAYS`); rows stay, and new activity revives them on the next run. This drops all 184 DOT projects (2015–2025), so the DOT precision fix isn't needed.
+- **Q3 → the neighborhood-map syncs:** `feature/neighborhood-map` is merged into this branch (its crons: sync-ulurp 04:00, sync-dot-projects 04:30, summarize-proposals 06:30 UTC). Crons only run on production, so `local_proposals` refreshes once this reaches `main`. The merge also brings the neighborhood map and proposal pages.
+- *(Mine)* **Daily, one cron:** with daily source syncs, the proposals adapter runs in `ingest-content` after Legistar (so links are known before folding); the weekly `ingest-neighborhood` cron is gone.
+
+**Left open:** after approval, apply 027, run `sync-ulurp` once (fills application numbers), enable the source, `npm run backfill:neighborhood -- --all`, then `backfill:embeddings` and `rank:widgets`.
 
 ### Phase B4 — Integration ✅ (2026-11-22)
 

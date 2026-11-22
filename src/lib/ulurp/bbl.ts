@@ -4,7 +4,7 @@
 const ZAP_BBL_URL = 'https://data.cityofnewyork.us/resource/2iga-a6mk.json'
 const PLUTO_URL = 'https://data.cityofnewyork.us/resource/64uk-42ks.json'
 
-async function socrataFetch<T>(baseUrl: string, params: Record<string, string>): Promise<T[]> {
+export async function socrataFetch<T>(baseUrl: string, params: Record<string, string>): Promise<T[]> {
   const url = new URL(baseUrl)
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value)
   if (process.env.NYC_OPEN_DATA_APP_TOKEN) {
@@ -33,7 +33,7 @@ async function socrataFetch<T>(baseUrl: string, params: Record<string, string>):
 // Socrata `in(...)` clause value list, single-quoted and escaped. Filters
 // out null/undefined/empty entries — the source datasets occasionally have
 // rows with a missing bbl or project_id, which would otherwise crash here.
-function inList(values: (string | null | undefined)[]): string {
+export function inList(values: (string | null | undefined)[]): string {
   return values
     .filter((v): v is string => !!v)
     .map((v) => `'${v.replace(/'/g, "''")}'`)
