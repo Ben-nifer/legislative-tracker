@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { RefreshCw, Sparkles, BarChart2, Tag, Users, FileText, MapPin } from 'lucide-react'
-import { generateSummariesBatch, generateShortSummaries, seedTopics, runSyncSponsorships, runSyncHistories, runSyncEvents, runSyncCouncilMembers, runSyncCommitteeMemberships, runScrapeDistrictData, runSyncCommunityBoards, runSyncLegislation, runRefreshStats, debugSponsorSync, forceSyncSingleBill, forceSyncSingleBillHistory } from '@/app/actions/admin'
+import { RefreshCw, Sparkles, BarChart2, Tag, Users, FileText, MapPin, Map, Construction } from 'lucide-react'
+import { generateSummariesBatch, generateShortSummaries, seedTopics, runSyncSponsorships, runSyncHistories, runSyncEvents, runSyncCouncilMembers, runSyncCommitteeMemberships, runScrapeDistrictData, runSyncCommunityBoards, runSyncLegislation, runRefreshStats, debugSponsorSync, forceSyncSingleBill, forceSyncSingleBillHistory, runSyncCommunityDistricts, runSyncUlurp, runSyncDotProjects, generateProposalSummariesBatch, runRefreshProposalStats, runGeocodeUlurpBatch } from '@/app/actions/admin'
 
 function CouncilSyncCard() {
   const [state, setState] = useState<JobState>('idle')
@@ -585,6 +585,125 @@ function JobCard({
   )
 }
 
+// Generic auto-looping batch job card — "Run once" does a single batch,
+// "Run all" keeps calling onRun until it reports remaining: 0 or Stop is
+// clicked. Mirrors SummariesCard's loop, generalized for reuse.
+function AutoRunBatchCard({
+  title,
+  description,
+  icon: Icon,
+  color,
+  onRun,
+  formatLog,
+}: {
+  title: string
+  description: string
+  icon: React.ElementType
+  color: string
+  onRun: () => Promise<Record<string, unknown> & { remaining?: number; error?: string }>
+  formatLog: (res: Record<string, unknown>) => string
+}) {
+  const [state, setState] = useState<JobState>('idle')
+  const [log, setLog] = useState<string[]>([])
+  const [autoRun, setAutoRun] = useState(false)
+  const autoRunRef = useRef(false)
+
+  async function runOnce(): Promise<number> {
+    const res = await onRun()
+    setLog((prev) => [
+      `${res.error ? '✗' : '✓'} ${formatLog(res)}`,
+      ...prev.slice(0, 19),
+    ])
+    return res.remaining ?? 0
+  }
+
+  async function handleRunOnce() {
+    setState('running')
+    await runOnce()
+    setState('done')
+  }
+
+  async function runAll() {
+    setState('running')
+    setLog([])
+    autoRunRef.current = true
+    setAutoRun(true)
+    try {
+      let remaining = Infinity
+      while (autoRunRef.current && remaining > 0) {
+        remaining = await runOnce()
+      }
+      setState('done')
+    } catch (e) {
+      setLog((prev) => [`✗ error: ${String(e)}`, ...prev])
+      setState('error')
+    }
+    setAutoRun(false)
+  }
+
+  function stop() {
+    autoRunRef.current = false
+  }
+
+  return (
+    <div className="bg-slate-800/80 border border-slate-700 rounded-xl p-6 space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className={`p-2 rounded-lg bg-${color}-500/10`}>
+            <Icon className={`w-5 h-5 text-${color}-400`} />
+          </div>
+          <div>
+            <h2 className="font-semibold text-white">{title}</h2>
+            <p className="text-sm text-slate-400 mt-0.5">{description}</p>
+          </div>
+        </div>
+        <div className="flex gap-2 shrink-0">
+          {autoRun ? (
+            <button
+              onClick={stop}
+              className="text-sm bg-red-700 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition-colors"
+            >
+              Stop
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={handleRunOnce}
+                disabled={state === 'running'}
+                className="text-sm bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors"
+              >
+                Run once
+              </button>
+              <button
+                onClick={runAll}
+                disabled={state === 'running'}
+                className={`text-sm bg-${color}-700 hover:bg-${color}-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2`}
+              >
+                Run all
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {autoRun && (
+        <div className={`flex items-center gap-2 text-sm text-${color}-300`}>
+          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+          Running continuously — click Stop to pause
+        </div>
+      )}
+
+      {log.length > 0 && (
+        <div className="text-xs rounded-lg p-3 font-mono bg-slate-900/60 text-slate-300 space-y-1 max-h-48 overflow-y-auto">
+          {log.map((line, i) => (
+            <div key={i}>{line}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function CronJobCard({
   title,
   description,
@@ -954,6 +1073,82 @@ export default function SyncPage() {
 
         {/* Generate short summaries for cards */}
         <ShortSummariesCard />
+
+        <h2 className="pt-4 text-lg font-bold text-white">Neighborhood Map (V2 Phase 1)</h2>
+
+        {/* Step 1: seed district boundaries — run once */}
+        <JobCard
+          title="Sync Community Districts"
+          description="Seeds community district boundary polygons from the NYC Community Districts ArcGIS FeatureServer. Run this once before syncing ULURP/DOT proposals — they're scoped to these districts."
+          icon={Map}
+          color="teal"
+          onRun={async () => {
+            const res = await runSyncCommunityDistricts()
+            return res as Record<string, unknown>
+          }}
+        />
+
+        {/* Step 2: ULURP proposals */}
+        <JobCard
+          title="Sync ULURP Proposals"
+          description="Pulls housing/rezoning land-use applications from NYC Open Data (ZAP) into local_proposals. Also runs automatically once a day."
+          icon={MapPin}
+          color="orange"
+          onRun={async () => {
+            const res = await runSyncUlurp()
+            return res as Record<string, unknown>
+          }}
+        />
+
+        {/* Step 3: DOT / capital projects */}
+        <JobCard
+          title="Sync DOT Capital Projects"
+          description="Pulls street redesign and capital construction projects from NYC Open Data into local_proposals. Also runs automatically once a day."
+          icon={Construction}
+          color="orange"
+          onRun={async () => {
+            const res = await runSyncDotProjects()
+            return res as Record<string, unknown>
+          }}
+        />
+
+        {/* Step 3.5: geocode ULURP proposals off their district-centroid fallback */}
+        <AutoRunBatchCard
+          title="Geocode ULURP Proposals"
+          description="Joins each ULURP proposal's tax lots (ZAP-BBL dataset) to PLUTO for a real lat/long, falling back to Claude address extraction + NYC GeoSearch when no BBL match exists. Upgrades it from the district-centroid placeholder to its real location. &quot;Run all&quot; keeps going until every proposal is processed."
+          icon={MapPin}
+          color="teal"
+          onRun={async () => (await runGeocodeUlurpBatch()) as Record<string, unknown> & { remaining?: number; error?: string }}
+          formatLog={(res) =>
+            `via BBL ${res.geocodedViaBbl}, via address ${res.geocodedViaAddress}, no match ${res.noMatchFound}, remaining ${res.remaining}` +
+            (res.error ? ` — error: ${res.error}` : '')
+          }
+        />
+
+        {/* Step 4: AI summaries for proposals */}
+        <AutoRunBatchCard
+          title="Generate Proposal Summaries"
+          description="Generates plain-language AI summaries for local_proposals that don't have one yet. Also runs automatically every day; &quot;Run all&quot; here catches up immediately."
+          icon={Sparkles}
+          color="indigo"
+          onRun={async () => (await generateProposalSummariesBatch()) as Record<string, unknown> & { remaining?: number; error?: string }}
+          formatLog={(res) =>
+            `processed ${res.processed}, failed ${res.failed}, remaining ${res.remaining}` +
+            (res.error ? ` — error: ${res.error}` : '')
+          }
+        />
+
+        {/* Step 5: refresh proposal stats */}
+        <JobCard
+          title="Refresh Proposal Stats"
+          description="Recalculates proposal trending scores and engagement counts. Also runs automatically every 15 minutes alongside legislation stats."
+          icon={BarChart2}
+          color="emerald"
+          onRun={async () => {
+            const res = await runRefreshProposalStats()
+            return res as Record<string, unknown>
+          }}
+        />
       </div>
 
       <p className="text-xs text-slate-600">

@@ -1,4 +1,5 @@
 import { createServiceClient } from '@/lib/supabase/server'
+import { pointInMultiPolygon, centroidOfMultiPolygon, type MultiPolygon } from '@/lib/geo/point-in-polygon'
 
 // ── NYC Open Data endpoints ──────────────────────────────────────────────────
 const COMMUNITY_DISTRICTS_URL = 'https://data.cityofnewyork.us/resource/5crt-au7u.geojson'
@@ -22,39 +23,6 @@ function boroCdToName(boroCd: string): string | null {
   const boroName = BOROUGH_NAMES[boroCode]
   if (!boroName) return null
   return `${boroName} Community Board ${cdNum}`
-}
-
-// ── Geometry helpers ─────────────────────────────────────────────────────────
-
-type Ring = [number, number][]
-type Polygon = Ring[]          // [outerRing, ...holes]
-type MultiPolygon = Polygon[]
-
-// Ray-casting point-in-polygon
-function pointInRing(px: number, py: number, ring: Ring): boolean {
-  let inside = false
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const [xi, yi] = ring[i]!
-    const [xj, yj] = ring[j]!
-    if ((yi > py) !== (yj > py) && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) {
-      inside = !inside
-    }
-  }
-  return inside
-}
-
-function pointInMultiPolygon(px: number, py: number, mp: MultiPolygon): boolean {
-  return mp.some(polygon => pointInRing(px, py, polygon[0]!))
-}
-
-// Average of all outer-ring vertices (good enough for centroid approximation)
-function centroidOfMultiPolygon(mp: MultiPolygon): [number, number] {
-  // Use the largest sub-polygon (most vertices) for the centroid
-  const outerRings = mp.map(p => p[0]!)
-  const ring = outerRings.reduce((best, r) => r.length > best.length ? r : best, outerRings[0]!)
-  const x = ring.reduce((s, p) => s + p[0], 0) / ring.length
-  const y = ring.reduce((s, p) => s + p[1], 0) / ring.length
-  return [x, y]
 }
 
 // ── Main export ──────────────────────────────────────────────────────────────

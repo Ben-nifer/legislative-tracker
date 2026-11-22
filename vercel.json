@@ -1,12 +1,24 @@
 {
   "crons": [
     {
+      "path": "/api/cron/sync-ulurp",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/sync-dot-projects",
+      "schedule": "30 4 * * *"
+    },
+    {
       "path": "/api/cron/sync-legislation",
       "schedule": "0 5 * * *"
     },
     {
       "path": "/api/cron/summarize-legislation",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/summarize-proposals",
+      "schedule": "30 6 * * *"
     },
     {
       "path": "/api/cron/ingest-content",
