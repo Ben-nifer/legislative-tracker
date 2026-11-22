@@ -29,6 +29,7 @@ function row(overrides: Partial<LegistarContentRow> = {}): LegistarContentRow {
     ai_summary: 'Adds protected bus lanes on key corridors.',
     official_summary: 'This bill would require DOT to…',
     legistar_url: 'https://legistar.council.nyc.gov/gateway.aspx?m=l&id=9999',
+    created_at: '2026-02-20T15:00:00+00:00',
     sponsorships: [
       { is_primary: true, legislators: { legistar_id: 101, district: '39' } },
       { is_primary: false, legislators: { legistar_id: 202, district: '33' } },
@@ -315,5 +316,43 @@ describe('joint hearings', () => {
     expect(item?.externalId).toBe('T2026-0100')
     expect(item?.metadata?.committees).toEqual(['Committee on Aging'])
     expect(item?.metadata?.joint_file_numbers).toBeUndefined()
+  })
+})
+
+describe('hearing dates', () => {
+  const oversight = (date: string) =>
+    row({
+      type: null,
+      file_number: 'T2026-2748',
+      title: 'Oversight - The Future of Hunts Point.',
+      status: 'Committee',
+      intro_date: date,
+      last_action_date: date,
+      created_at: '2026-11-04T18:01:09+00:00',
+      legislation_history: [],
+      sponsorships: [],
+    })
+
+  it('makes an upcoming hearing date next_event_at, with activity from when it was first seen', () => {
+    const item = toContentItem(oversight('2026-11-24'), NOW)
+    expect(item?.nextEventAt).toBe('2026-11-24T17:00:00Z')
+    expect(item?.lastActivityAt).toBe('2026-11-04T18:01:09+00:00')
+    expect(item?.stage).toBe('hearing_scheduled')
+  })
+
+  it('treats a hearing later today as upcoming', () => {
+    expect(toContentItem(oversight('2026-11-20'), NOW)?.nextEventAt).toBe('2026-11-20T17:00:00Z')
+  })
+
+  it('makes a past hearing date the last activity', () => {
+    const item = toContentItem(oversight('2026-10-01'), NOW)
+    expect(item?.nextEventAt).toBeUndefined()
+    expect(item?.lastActivityAt).toBe('2026-10-01')
+    expect(item?.stage).toBe('in_committee')
+  })
+
+  it('never puts last activity in the future for other items either', () => {
+    const item = toContentItem(row({ intro_date: '2026-12-01', last_action_date: '2026-12-01', legislation_history: [] }), NOW)
+    expect(item?.lastActivityAt).toBe('2026-02-20T15:00:00+00:00')
   })
 })

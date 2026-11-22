@@ -21,6 +21,7 @@ export interface LegistarContentRow {
   ai_summary: string | null
   official_summary: string | null
   legistar_url: string | null
+  created_at: string | null // when our sync first saw the matter
   sponsorships: {
     is_primary: boolean | null
     legislators: { legistar_id: number | null; district: string | null } | null
@@ -220,16 +221,20 @@ export function toContentItem(
   if (joint && joint.canonical !== row.file_number) return null
   const decision = itemType === 'project' ? ctx.landUseDecisions.get(row.file_number) : undefined
 
-  const lastActivity = latestDate(
-    row.legislation_history[0]?.action_date,
-    row.last_action_date,
-    row.intro_date,
-    decision?.date
-  )
+  // Activity is only what has already happened. An oversight hearing's
+  // intro/last-action date is the hearing date itself, which is often ahead;
+  // a future hearing counts from when we first saw it, and its date becomes
+  // next_event_at so the §6.3 upcoming curve ranks it.
+  const today = now.toISOString().slice(0, 10)
+  const past = (d: string | null | undefined) => (d && d.slice(0, 10) <= today ? d : null)
+  const dates = [row.legislation_history[0]?.action_date, row.last_action_date, row.intro_date, decision?.date]
+  if (!latestDate(...dates)) return null // no dates at all: skip, as before
+  const lastActivity = latestDate(...dates.map(past)) ?? row.created_at
   if (!lastActivity) return null
 
-  const nextEventAt = row.events
-    .map((e) => e.event_date)
+  // Hearing dates carry no time; midday Eastern keeps the same calendar day in New York
+  const hearingAt = itemType === 'hearing' && row.intro_date && row.intro_date >= today ? `${row.intro_date}T17:00:00Z` : null
+  const nextEventAt = [...row.events.map((e) => e.event_date), hearingAt]
     .filter((d): d is string => !!d && new Date(d) > now)
     .sort()[0]
 
@@ -302,7 +307,7 @@ export function toContentItem(
 
 const SELECT = `
   id, slug, file_number, title, status, type, intro_date, last_action_date,
-  ai_summary, official_summary, legistar_url,
+  ai_summary, official_summary, legistar_url, created_at,
   sponsorships(is_primary, legislators(legistar_id, district)),
   committee_id,
   legislation_topics(topics(slug)),
