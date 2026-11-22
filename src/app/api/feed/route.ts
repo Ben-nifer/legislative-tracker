@@ -5,7 +5,7 @@ import { createServerSupabaseClient, createServiceClient } from '@/lib/supabase/
 import { feedRateLimit } from '@/lib/rate-limit'
 import { getFeed } from '@/lib/feed/getFeed'
 import { contextFromGuest, loadUserContext } from '@/lib/feed/context'
-import { GUEST_CONTEXT_COOKIE, guestContextSchema, parseGuestContext } from '@/lib/onboarding/guest'
+import { GUEST_CONTEXT_COOKIE, parseGuestContext, selectionsSchema } from '@/lib/onboarding/guest'
 
 // POST /api/feed (recommendations-planv1.2.md §7.3): the onboarding preview and
 // client refreshes. `context` is the onboarding selection in progress (guest
@@ -15,7 +15,7 @@ import { GUEST_CONTEXT_COOKIE, guestContextSchema, parseGuestContext } from '@/l
 export const maxDuration = 30 // headroom for an uncached typed interest
 
 const bodySchema = z.object({
-  context: guestContextSchema.optional(),
+  context: selectionsSchema.optional(),
   size: z.number().int().min(1).max(10).default(3),
   lists: z.boolean().default(false),
   previous: z

@@ -13,6 +13,7 @@ export interface Legislator {
   slug: string
   photoUrl: string | null
   district: string | null
+  title?: string | null // office, e.g. "Council Member", "Mayor"
 }
 
 export interface LegislatorItems {
@@ -27,6 +28,7 @@ export interface ActivePolitician {
   slug: string
   photoUrl: string | null
   district: string | null
+  title: string | null
   score: number // 0–100
   components: { billsIntroduced: number; upcomingEvents: number; recentActions: number } // points
   counts: { billsIntroduced: number; upcomingEvents: number; recentActions: number }
@@ -128,6 +130,7 @@ export function rankActivePoliticians(
         slug: l.slug,
         photoUrl: l.photoUrl,
         district: l.district,
+        title: l.title ?? null,
         score: Math.round((components.billsIntroduced + components.upcomingEvents + components.recentActions) * 100) / 100,
         components,
         counts,

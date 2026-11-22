@@ -18,6 +18,26 @@
   --color-nyc-orange-hover: #FF7A3D;
   --color-nyc-muted:        #4E6B8C;  /* blue-gray — readable on white (5:1) and dark (4:1) */
   --color-nyc-muted-light:  #8BAAD0;  /* lighter — use on dark bg only */
+
+  /* Civic theme: onboarding and the widget home page only
+     (onboarding-build-planv1.1.md §7, design/civic-app-onboarding.html) */
+  --color-civic-bg:          #F6F5F1;
+  --color-civic-surface:     #FFFFFF;
+  --color-civic-sunken:      #F1EFEA;  /* coming-soon and empty panels */
+  --color-civic-ink:         #15171C;
+  --color-civic-muted:       #4A4F5A;
+  --color-civic-border:      #DAD8D1;
+  --color-civic-divider:     #ECEAE4;
+  --color-civic-rule:        #E3E1DA;
+  --color-civic-dash:        #C9C6BD;
+  --color-civic-accent:      #0B6B5D;
+  --color-civic-accent-hover:#08544A;
+  --color-civic-accent-soft: #E3F0EC;
+  --color-civic-badge-bg:    #FBEBDD;
+  --color-civic-badge-ink:   #9A4A0C;
+  --color-civic-pill:        #ECEAE4;
+  --font-civic:   var(--font-inter), system-ui, sans-serif;
+  --font-display: var(--font-space-grotesk), var(--font-inter), sans-serif;
 }
 
 :root {
@@ -29,4 +49,22 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Civic pages set their own background and type */
+.theme-civic {
+  background: var(--color-civic-bg);
+  color: var(--color-civic-ink);
+  font-family: var(--font-civic);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .civic-enter {
+    animation: civic-enter 200ms ease-out;
+  }
+}
+
+@keyframes civic-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
 }

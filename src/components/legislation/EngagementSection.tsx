@@ -1,9 +1,14 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import { usePathname } from 'next/navigation'
 import { ThumbsUp, ThumbsDown, Minus, Bell, Users, MessageSquare } from 'lucide-react'
 import { setStance, type Stance } from '@/app/actions/engagement'
 import { followLegislation, unfollowLegislation } from '@/app/actions/social'
+import { flags } from '@/lib/flags'
+import { track } from '@/lib/analytics/track'
+import type { PendingAction } from '@/lib/onboarding/session'
+import SignInSheet from '@/components/onboarding/SignInSheet'
 
 type Stats = {
   support_count: number
@@ -92,8 +97,19 @@ export default function EngagementSection({
   const [error, setError] = useState<string | null>(null)
   const [showFriendsTooltip, setShowFriendsTooltip] = useState(false)
   const tooltipRef = useRef<HTMLButtonElement>(null)
+  // New onboarding: signed-out clicks open the sign-in sheet, and the action
+  // completes after sign-in (spec §8). Without the flag they stay disabled.
+  const gated = !isLoggedIn && flags.newOnboarding
+  const locked = !isLoggedIn && !gated
+  const pathname = usePathname()
+  const [gate, setGate] = useState<{ mode: 'stance' | 'follow'; pending: PendingAction } | null>(null)
 
   async function handleStance(stance: Stance) {
+    if (gated) {
+      track('auth_prompt', { trigger: 'stance' })
+      setGate({ mode: 'stance', pending: { action: 'stance', legislationId, stance } })
+      return
+    }
     if (!isLoggedIn || pending) return
     setError(null)
 
@@ -116,6 +132,11 @@ export default function EngagementSection({
   }
 
   async function handleFollow() {
+    if (gated) {
+      track('auth_prompt', { trigger: 'follow' })
+      setGate({ mode: 'follow', pending: { action: 'follow_legislation', legislationId } })
+      return
+    }
     if (!isLoggedIn || followPending) return
     setError(null)
 
@@ -155,12 +176,12 @@ export default function EngagementSection({
               <button
                 key={s.value}
                 onClick={() => handleStance(s.value)}
-                disabled={!isLoggedIn || pending}
+                disabled={locked || pending}
                 title={isLoggedIn ? s.tooltip : 'Sign in to take a stance'}
                 aria-pressed={isActive}
                 className={[
                   'flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all duration-150',
-                  !isLoggedIn || pending ? DISABLED : isActive ? s.activeClasses : INACTIVE,
+                  locked || pending ? DISABLED : isActive ? s.activeClasses : INACTIVE,
                 ].join(' ')}
               >
                 {s.icon}
@@ -178,12 +199,12 @@ export default function EngagementSection({
           {/* Follow — independent toggle */}
           <button
             onClick={handleFollow}
-            disabled={!isLoggedIn || followPending}
+            disabled={locked || followPending}
             title={isLoggedIn ? (isFollowing ? 'Unfollow this bill' : 'Follow for updates') : 'Sign in to follow'}
             aria-pressed={isFollowing}
             className={[
               'group flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all duration-150',
-              !isLoggedIn || followPending
+              locked || followPending
                 ? DISABLED
                 : isFollowing
                 ? 'bg-blue-50 border-blue-300 text-blue-700'
@@ -303,6 +324,10 @@ export default function EngagementSection({
           {stats.comment_count.toLocaleString()} comments
         </span>
       </div>
+
+      {gated && (
+        <SignInSheet open={!!gate} mode={gate?.mode ?? 'stance'} next={pathname} pending={gate?.pending} onClose={() => setGate(null)} />
+      )}
     </div>
   )
 }

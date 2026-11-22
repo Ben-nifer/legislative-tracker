@@ -325,3 +325,27 @@ One short section per finished phase: what shipped, decisions made during the bu
 - GeoSearch autocomplete rewrites non-NYC addresses to NYC ones, so S1 must let users submit what they typed rather than force a suggestion (B2).
 - Existing gap, not changed: `/terms/accept` accepts `next=//host`.
 
+### Phase B2 — Screens (2026-11-22, on real data; not yet on a preview)
+
+**Shipped:** `/welcome` (S0–S4, full-screen, step in the URL), the live preview (split view ≥1024 px; peek card + sheet below), the sign-in sheet (Google + magic link), and the widget home page at `/` (S6) with "See all" pages at `/section/[key]`. Everything sits behind `NEXT_PUBLIC_FLAG_NEW_ONBOARDING`; with it off, `/welcome` 404s and `/` is today's page. Components in `src/components/onboarding/` (flow in `flow/`), civic tokens in `globals.css`, Inter + Space Grotesk via `next/font` on civic pages only. Verified with a production build + `next start` and headless-Chrome screenshots of each step against the design export; S1 resolved a real address through Geoclient.
+
+**Decisions made during the build (product-owner answers unless noted):**
+- **Real data instead of fixtures:** recs Phase 4's `getFeed` + `POST /api/feed` were built first (see the recommendations plan's Done log), so the screens never used fixtures. `resolveInterest` and `/api/politicians/active` were already real.
+- **The design export wins** where it differs from this plan; spec v1.2 §6.1 was updated to match (section titles are names only, cards link to the item page with no stance controls).
+- **`/welcome` is full-screen** with its own bar; **the home page uses the export's civic header**; other pages keep the NYC header (`SiteChrome` hides the global header/footer on civic pages).
+- **Topics left as they are** (duplicates included); S4 shows the 16 topics with the most live items.
+- *(Mine)* **Card titles use the AI `short_summary` headline** when present (93% of live items), else the official title, so cards read like the export.
+- *(Mine)* **Guests see Tracked and Friend activity with the export's empty states**; Trending is hidden while it's empty (no engagement in the last 7 days).
+- *(Mine)* **Neighborhood stays "Coming soon"** per the coverage registry, so S2's Park Slope card is disabled and "Add another neighborhood" is hidden until B3. Federal/State cards keep "Yours" and districts, as in the export.
+- *(Mine)* **S3 order follows the export:** Council Member and Mayor first, then the "Coming soon" offices; "You follow" lists follows outside both lists. The active list got `title` and an optional `limit` (for "See more"), and its fallback heading is now "Active in New York City".
+- *(Mine)* **Signed-in users in `/welcome`** start from their saved follows (council member → district for old accounts) and save on exit; only what they turned off is removed, so follows made elsewhere aren't lost and the cookie caps don't apply.
+- *(Mine)* **Gated actions on item pages:** with the flag on, signed-out stance/follow clicks open the sign-in sheet and complete after sign-in; with it off they stay disabled.
+- *(Mine)* No "Use my current location" on web (Q5); the coach mark is a small dismissible note under Customize.
+- *(Mine)* **Local runs:** `next.config.ts` pins `turbopack.root` (a `package-lock.json` in the home folder made dev hang watching `~`), and rate limits pass through when there are no Upstash keys and it isn't Vercel.
+
+**Left open:**
+- Smoke-test on a Vercel preview with the flag on: sign-in from the sheet (Google and magic link), carry-over, a gated stance, `/api/events`.
+- Playwright E2E + axe (§9) not written yet; only unit tests and manual screenshots so far.
+- The 7% of items without a headline show the long official title.
+- Mobile home page reuses the desktop header (wraps to two lines); the export only has a web S6.
+

@@ -12,7 +12,8 @@ import { type ActivePolitician, interleaveBodies } from '@/lib/ranking/politicia
 // jurisdictions: the user's selected place keys; none → all covered jurisdictions.
 // exclude: the user's own representatives, already shown under "Your representatives".
 
-const LIMIT = 8
+const LIMIT = 8 // spec §S3: about 8, with "See more" asking for up to MAX_LIMIT
+const MAX_LIMIT = 24
 
 // Which body covers a selected place. NYC Council is the only one with data today;
 // NY State and Congress join here once their adapters exist.
@@ -31,6 +32,7 @@ const listParam = (max: number, item: z.ZodType<string, string>) =>
 const querySchema = z.object({
   jurisdictions: listParam(50, z.string().regex(/^[a-z_]+:[A-Za-z0-9:_-]+$/)),
   exclude: listParam(50, z.uuid()),
+  limit: z.coerce.number().int().min(1).max(MAX_LIMIT).optional(),
 })
 
 export async function GET(request: Request) {
@@ -39,7 +41,7 @@ export async function GET(request: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: 'Invalid request', issues: parsed.error.issues }, { status: 400 })
   }
-  const { jurisdictions, exclude } = parsed.data
+  const { jurisdictions, exclude, limit } = parsed.data
 
   const supabase = createServiceClient()
   const [{ data: cached, error }, { data: legislatures }] = await Promise.all([
@@ -68,11 +70,11 @@ export async function GET(request: Request) {
   const candidates = ((cached?.items ?? []) as ActivePolitician[]).filter(
     (p) => !excluded.has(p.legislatorId) && (!bodies || bodies.has(p.legislatureId))
   )
-  const politicians = interleaveBodies(candidates, LIMIT)
+  const politicians = interleaveBodies(candidates, limit ?? LIMIT)
 
   return NextResponse.json(
     {
-      heading: jurisdictions.length ? 'Active in your jurisdictions' : 'Active in New York',
+      heading: jurisdictions.length ? 'Active in your jurisdictions' : 'Active in New York City',
       politicians,
       hasMore: candidates.length > politicians.length,
       configVersion: cached?.config_version ?? null,

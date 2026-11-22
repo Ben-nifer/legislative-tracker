@@ -356,3 +356,22 @@ export async function getFeed(service: SupabaseClient, ctx: FeedContext, opts: G
   const versions = [...cache.values()].map((c) => c.configVersion).filter((v): v is number => v != null)
   return { popular, widgets, added, configVersion: versions.length ? Math.max(...versions) : null }
 }
+
+// "See all" for one shared widget: the same section, up to the 30 cached items
+export async function getSection(service: SupabaseClient, key: string, now = new Date()): Promise<FeedWidget | null> {
+  const ctx: FeedContext = { userId: null, jurisdictions: [], topics: [], legislatorIds: [] }
+  const [kind, ...rest] = key.split(':')
+  const id = rest.join(':')
+  if (kind === 'jurisdiction' && ['federal', 'state', 'city'].includes(id)) ctx.jurisdictions.push({ type: id, id: id === 'city' ? 'nyc' : id })
+  else if (kind === 'place' && id.startsWith('neighborhood:')) ctx.jurisdictions.push({ type: 'neighborhood', id: id.slice('neighborhood:'.length) })
+  else if (kind === 'politician' && id) ctx.legislatorIds.push(id)
+  else if (kind === 'interest' && id) ctx.topics.push({ kind: 'interest', phrase: id, display: id })
+  else if (kind === 'topic' && id) {
+    const { data } = await service.from('topics').select('id').eq('slug', id).maybeSingle()
+    if (!data) return null
+    ctx.topics.push({ kind: 'topic', id: data.id })
+  } else return null
+
+  const feed = await getFeed(service, ctx, { size: 30, now })
+  return feed.widgets.find((w) => w.key === key) ?? null
+}

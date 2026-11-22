@@ -266,7 +266,7 @@ export async function runPrecompute(supabase: SupabaseClient, now = new Date()):
 
   // 2e. Politician widgets + the S3 activity list (§6.7). Party is never selected.
   const [{ data: legislatorRows, error: legError }, { data: roles, error: rolesError }] = await Promise.all([
-    supabase.from('legislators').select('id, legislature_id, full_name, slug, photo_url, district').eq('is_active', true),
+    supabase.from('legislators').select('id, legislature_id, full_name, slug, photo_url, district, title').eq('is_active', true),
     supabase.rpc('politician_item_roles'),
   ])
   if (legError) throw new Error(`legislators read failed: ${legError.message}`)
@@ -282,6 +282,7 @@ export async function runPrecompute(supabase: SupabaseClient, now = new Date()):
       fullName: l.full_name,
       slug: l.slug,
       photoUrl: l.photo_url,
+      title: l.title,
       district: l.district,
     }))
   const itemsByLegislator = new Map<string, LegislatorItems>()

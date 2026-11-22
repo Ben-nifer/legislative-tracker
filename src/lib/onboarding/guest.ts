@@ -33,6 +33,19 @@ export const guestContextSchema = z.object({
 })
 
 export type GuestContext = z.infer<typeof guestContextSchema>
+
+// The same shape without the cookie's size caps: a signed-in account's saved
+// follows, edited in /welcome (never written to the cookie)
+export const selectionsSchema = z.object({
+  v: z.literal(1),
+  places: z.array(z.object({ type: userPlaceType, id: placeId })).max(8),
+  jurisdictions: z.array(z.object({ type: jurisdictionPlaceType, id: placeId })).max(100),
+  legislatorIds: z.array(z.uuid()).max(500),
+  topicIds: z.array(z.uuid()).max(200),
+  interests: z
+    .array(z.object({ phrase: z.string().min(1).max(MAX_PHRASE_LENGTH), display: z.string().min(1).max(MAX_PHRASE_LENGTH) }))
+    .max(100),
+})
 export type GuestPlace = GuestContext['places'][number]
 
 export function emptyGuestContext(): GuestContext {

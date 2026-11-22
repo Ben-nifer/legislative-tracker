@@ -616,6 +616,19 @@ Built to the **v1.1** Phase 2 scope, before v1.2 landed. The v1.2 additions to P
 - **Hearing dates → `next_event_at`.** An oversight hearing's intro/last-action date is the hearing date. Upcoming hearings now carry it as `next_event_at` (stored as 17:00 UTC, midday Eastern, so the New York weekday is right), which also moves them to `hearing_scheduled` like any item with an upcoming event. `last_activity_at` now only uses dates that have passed, for every item; when all of a row's dates are ahead, it falls back to `legislation.created_at` (when our sync first saw it). After the hearing, the next run makes the hearing date its last activity. Live: 19 upcoming hearings, no future `last_activity_at`. Hearings still lead `jurisdiction:city` (recency 0.82–1.0, from being scheduled recently, plus the stage bump to 0.8). That's the formula as designed; tune with weights if it's too much.
 - **`syncEvents` fixed.** Bills had no upcoming hearings because (1) production never runs it: the Phase 1 change that calls it from the sync cron is only on `feature/onboarding`, and Vercel runs crons on production only, so the 5 old rows came from a manual admin run; (2) its matter-ID → legislation map was an unpaged select, capped at PostgREST's 1,000 rows, so it linked 11 of today's 84 agenda items (paged: 83; the 84th matter isn't in `legislation`); (3) it stored Legistar's zone-less date at UTC midnight, the evening before in New York. Now paged, with date + `EventTime` read as New York time (midday when there's no time; `src/lib/legistar/dates.ts`), and it refuses to wipe `events` if the map comes back empty. Ran once: 83 links across 62 items; 25 bills, 2 resolutions and 5 Land Use items have `next_event_at`; 51 items are `hearing_scheduled`; 33 members have an S3 upcoming-hearing signal. **It runs on its own only once this branch reaches `main`.**
 
+### Phase 4 — Feed & widgets, part 1 (2026-11-22)
+
+**Shipped:** `src/lib/feed/` — `getFeed` (widget list from follows or guest context in §7.2 order, cache reads, Tracked / Trending / Friend activity, the neighborhood "Nearby" top-up from `neighborhoods.adjacent_ntas`, on-demand ranking for uncached typed interests, the new-item diff), `getSection` for "See all", card display labels, the preview count text. `POST /api/feed` (body `context` = onboarding selection, `size`, `lists`, `previous`), rate-limited by IP. 9 new tests.
+
+**Decisions made during the build:**
+- **Section titles are names only** (spec v1.2 §6.1): "New York City", "Park Slope", "Housing", "bike lanes · Park Slope" (typed interest with a place), "[Name] · Council Member".
+- **The diff takes `previous: { widgets, pairs }`** (widget keys and `widgetKey|itemId` pairs from the last response) and returns `added: { titles, items }`; the client builds "Added 3 items from New York City · 2 sections · 6 items".
+- **Card labels:** type and stage in plain words ("Headed to a full vote"); context = "Hearing Thursday" (≤ 6 days) / "Hearing Dec 2", else "Passed committee"; titles use the `short_summary` headline when there is one.
+- **Friend activity:** latest stance or comment per bill by people the user follows ("Ana supports this"); Tracked = followed or stanced legislation, next event first.
+- Topic order for signed-in users interleaves chips and typed interests by `created_at`; the guest cookie keeps them apart, so guests get chips first.
+
+**Left open:** impression/click logging (§3.5), related-topic suggestions on the home page, and the §9 load test. Mobile and preview performance measured only from a laptop (~180–650 ms per feed).
+
 ---
 
 ## 15. Research notes: measuring importance

@@ -1,6 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { geocodeNycAddress, type ResolvedDistricts } from '../../geo/geoclient'
 import type { GuestPlace } from '../guest'
+import { addressLabel } from '../address-label'
+
+export { addressLabel }
 
 // resolveAddress (onboarding-build-planv1.1.md §4.1, §4.6): address → district
 // and NTA IDs. Only IDs leave this module; the address isn't returned or kept.
@@ -28,10 +31,6 @@ export function districtsToPlaces(d: ResolvedDistricts): GuestPlace[] {
   if (d.congressionalDistrict) places.push({ type: 'congressional', id: d.congressionalDistrict })
   if (d.ntaCode) places.push({ type: 'neighborhood', id: d.ntaCode })
   return places
-}
-
-export function addressLabel(councilDistrict: string, neighborhoodName: string | null): string {
-  return [`Council District ${councilDistrict}`, neighborhoodName].filter(Boolean).join(' · ')
 }
 
 export async function resolveAddress(supabase: SupabaseClient, address: string): Promise<AddressResolution> {

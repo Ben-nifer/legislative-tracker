@@ -4,6 +4,8 @@ import { ArrowRight, TrendingUp, Rss, Sparkles, MapPin } from 'lucide-react'
 import { format } from 'date-fns'
 import MemberAvatar from '@/components/council/MemberAvatar'
 import CouncilMemberLookup from '@/components/council/CouncilMemberLookup'
+import WidgetHome from '@/components/onboarding/WidgetHome'
+import { flags } from '@/lib/flags'
 
 export const revalidate = 300
 
@@ -143,6 +145,9 @@ async function getForYouLegislation(userId: string, supabase: Awaited<ReturnType
 }
 
 export default async function HomePage() {
+  // New-onboarding flag on: the widget home page (build plan §6). This page stays as the fallback.
+  if (flags.newOnboarding) return <WidgetHome />
+
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
 
