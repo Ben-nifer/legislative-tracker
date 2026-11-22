@@ -10,6 +10,8 @@
 **Development Environment:** Claude Code CLI in VS Code integrated terminal
 
 > **Active work:** We're implementing **`recommendations-plan.md`** phase by phase (content layer → embeddings → ranking → feed widgets → tuning). It builds on **`onboarding-spec.md`**. Read both before working on onboarding, the home feed, `src/lib/ingest/`, or anything touching `content_items`. Decisions marked [DECIDED] there are final; ask before deciding anything the plan doesn't cover.
+>
+> **Progress lives in the plan's §14 Done log.** Read it first to see which phases are finished and what was decided during each build. When you finish a phase, add a short entry there before committing: what shipped, decisions made that the plan didn't cover, and anything left open. Never apply a migration to Supabase without the user's explicit approval.
 
 ### Core Value Proposition
 "Make NYC legislation accessible and engaging for everyday New Yorkers"

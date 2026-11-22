@@ -1,6 +1,6 @@
 # Recommendations Plan — Content Layer, Embeddings & Feed Ranking
 
-**Status:** Draft v1.1 · 2026-11-22 · Built from product-owner interview answers and a review of the onboarding mockup (Claude design canvas "Civic App Onboarding": iPhone clickable flow + web split view).
+**Status:** Draft v1.1 · 2026-11-22 · **Phase 1 done** (see §14 Done log) · Built from product-owner interview answers and a review of the onboarding mockup (Claude design canvas "Civic App Onboarding": iPhone clickable flow + web split view).
 **Builds on:** `onboarding-spec.md` v1.1 (§6 live preview, §7 content & ranking).
 **Scope:** The data layer, embeddings pipeline and ranking engine behind the onboarding live preview and the home-feed widgets.
 
@@ -468,7 +468,29 @@ It runs one candidate-and-score pass and slices the results into each requested 
 | ~~Q5~~ | ~~Log impressions?~~ **Resolved:** yes (D17, §3.5) | — |
 | Q6 | Update the mockup: add the "Top for you" strip to the final page, and switch related topics to tap-to-add | Keeps the design and the plan in sync |
 | Q7 | The mockup's in-feed card suggests "Follow Brooklyn **Borough** projects?", but spec §3 says boroughs aren't followable | Resolve when suggestion cards are planned (phase 2) |
+| Q8 | Council Land Use items (`project`, neighborhood level) cover the same ULURP applications as `local_proposals` (from `feature/neighborhood-map`, already in the live DB). Link, merge or replace them so the neighborhood banner doesn't show duplicates | Decide before Phase 3 |
 
 ## 13. Housekeeping
 
-`CLAUDE.md` is out of date: it lists Next.js 14 (the repo runs 16.1.6) and `claude-sonnet-4-20250514` for summaries (`summarize.ts` uses Haiku). Update it alongside Phase 1.
+~~`CLAUDE.md` is out of date~~ **Done in Phase 1** (Next.js 16, Haiku 4.5, pointer to this plan).
+
+## 14. Done log
+
+One short section per finished phase: what shipped, decisions made during the build that this plan didn't cover, and anything left open.
+
+### Phase 1 — Content layer ✅ (2026-11-22, commit `e3cb205`)
+
+**Shipped:** migration `020_content_layer.sql` (all §3 tables, pgvector enabled, D15 weights seeded as `ranking_config` v1) and `021_lock_down_definer_functions.sql`, both applied. `src/lib/ingest/` (contract, runner, NYC Legistar adapter). `/api/cron/ingest-content` at `15 */2 * * *`. `npm run backfill:content` (ran: 9,169 items; re-run writes 0). Vitest adapter tests (`npm test`). `VOYAGE_API_KEY` is set in `.env.local` and in Vercel (Preview, `feature/onboarding` only; add Production at merge).
+
+**Decisions made during the build:**
+- **Numbering:** migration is `020`, not `014`. `feature/neighborhood-map` already applied 014–019 to the live DB.
+- **Phase 0 folded in:** 020 enables pgvector and holds the full §3 schema in one migration.
+- **Which Legistar rows:** Intros → `bill`, Resolutions → `resolution`, Land Use (`LU`) → `project`, T-items whose title starts with "Oversight" → `hearing`. Skipped: Mayoral communications (`M`), `SLR`, other T-items.
+- **Land Use items:** `jurisdiction_level = neighborhood`. Places are the council districts parsed from the title (155 have none). No people attached: the listed sponsor is the subcommittee chair, not the local member.
+- **Stage mapping** (in `adapters/nyc-legistar.ts`): Introduced → introduced; Committee / Laid Over / Deferred → in_committee (→ hearing_scheduled with a future event); Reported from Committee (+ and Introduced) / General Orders / Coupled on Call-Up / Companion Pending → passed_committee; Enacted (Mayor's Desk) → passed_chamber; Enacted / Adopted / Local Laws → enacted; Vetoed / Disapproved → vetoed; Filed / Filed (End of Session) / Withdrawn / Defeated / Received, Ordered, Printed and Filed → dead.
+- **Change detection:** `legislation.updated_at` never changes, so the Legistar adapter scans everything each run (~10s). The runner hashes each resolved item (`ingest_hash`) and skips unchanged rows. `content_hash` (title + summary) is kept separately for re-embedding.
+- **Person IDs:** a new `legislator_external_ids (source_id, external_id) → legislator_id` table. A trigger keeps Legistar IDs in sync. The contract also gained an optional `legislationId`.
+- **Writes** go through one transactional function, `upsert_content_items()`, callable by the service role only.
+- **Hearings:** `syncEvents()` is now called from the sync-legislation cron, so `next_event_at` and `hearing_scheduled` start filling in after deploy.
+
+**Left open:** Q8 above. `syncEvents()` shares the sync cron's 300s budget; move it to its own cron if timeouts appear. The HNSW index assumes `voyage-3.5`; recreate it if Phase 2 picks a different model.
