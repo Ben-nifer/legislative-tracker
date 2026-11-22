@@ -9,6 +9,10 @@
       "schedule": "0 */2 * * *"
     },
     {
+      "path": "/api/cron/ingest-content",
+      "schedule": "15 */2 * * *"
+    },
+    {
       "path": "/api/cron/send-digests",
       "schedule": "0 9 * * *"
     },

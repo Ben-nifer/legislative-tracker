@@ -9,6 +9,8 @@
 **GitHub Repository:** `legislative-tracker`
 **Development Environment:** Claude Code CLI in VS Code integrated terminal
 
+> **Active work:** We're implementing **`recommendations-plan.md`** phase by phase (content layer → embeddings → ranking → feed widgets → tuning). It builds on **`onboarding-spec.md`**. Read both before working on onboarding, the home feed, `src/lib/ingest/`, or anything touching `content_items`. Decisions marked [DECIDED] there are final; ask before deciding anything the plan doesn't cover.
+
 ### Core Value Proposition
 "Make NYC legislation accessible and engaging for everyday New Yorkers"
 
@@ -109,7 +111,7 @@
 
 | Layer | Technology | Notes |
 |-------|------------|-------|
-| **Framework** | Next.js 14 (App Router) | Using `src/` directory, Server Components by default |
+| **Framework** | Next.js 16 (App Router) + React 19 | Using `src/` directory, Server Components by default |
 | **Language** | TypeScript | Strict mode enabled |
 | **Styling** | Tailwind CSS + shadcn/ui | Dark theme, custom color palette |
 | **Database** | Supabase (PostgreSQL) | Hosted, with Row Level Security |
@@ -205,6 +207,12 @@ legislative-tracker/
 │   │   │   ├── client.ts
 │   │   │   ├── sync.ts
 │   │   │   └── types.ts
+│   │   ├── ingest/               # Content layer (recommendations-plan.md §4)
+│   │   │   ├── types.ts          # SourceAdapter / NormalizedItem contract
+│   │   │   ├── run.ts            # Shared runner: resolve IDs, hash, upsert
+│   │   │   ├── index.ts          # Registered adapters
+│   │   │   └── adapters/
+│   │   │       └── nyc-legistar.ts
 │   │   ├── ai/
 │   │   │   └── summarize.ts      # Claude API integration
 │   │   ├── moderation/
@@ -367,6 +375,7 @@ LEGISTAR_API_TOKEN=
 # AI
 ANTHROPIC_API_KEY=
 OPENAI_API_KEY=
+VOYAGE_API_KEY=          # Embeddings (recommendations-plan.md §5)
 
 # Cron
 CRON_SECRET=
@@ -560,9 +569,8 @@ export async function createCustomTag(name: string) {
 
 ### Anthropic Claude API
 
-- Model: `claude-sonnet-4-20250514`
-- Used for: Plain-language summaries
-- Cost: ~$0.003 per summary
+- Model: `claude-haiku-4-5-20251001` (see `src/lib/ai/summarize.ts`)
+- Used for: Plain-language summary, short headline, and topic tags in one call
 
 ### OpenAI Moderation API
 
@@ -678,4 +686,4 @@ The relevant file is src/app/actions/comments.ts
 
 ---
 
-*Last updated: February 2025*
+*Last updated: November 2026*

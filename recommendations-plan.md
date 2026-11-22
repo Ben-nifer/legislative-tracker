@@ -60,7 +60,7 @@
 
 ## 3. Data model
 
-All new tables live in a single migration: `014_content_layer.sql`. Existing tables (`legislation`, `legislators`, `topics`, `topic_follows`, `legislator_follows`, `user_follows`, `engagement_events`, `legislation_stats`) stay as they are.
+All new tables live in a single migration: `020_content_layer.sql`. Existing tables (`legislation`, `legislators`, `topics`, `topic_follows`, `legislator_follows`, `user_follows`, `engagement_events`, `legislation_stats`) stay as they are.
 
 ### 3.1 Sources & content
 
@@ -437,7 +437,7 @@ It runs one candidate-and-score pass and slices the results into each requested 
 | Phase | Deliverable | Depends on |
 |---|---|---|
 | **0. Setup** | Voyage API key stored as a secret; `pgvector` enabled in Supabase; `api.voyageai.com` allowed on the network | — |
-| **1. Content layer** | Migration `014`; adapter contract + runner; Legistar adapter; backfill | 0 |
+| **1. Content layer** | Migration `020`; adapter contract + runner; Legistar adapter; backfill | 0 |
 | **2. Embeddings** | Embed cron; backfill; `interest_phrases` cache; `/api/interests/resolve` | 1 |
 | **3. Ranking engine** | `feed_candidates`; scorer; sponsor cap; reasons; `ranking_config`; S3 politician ranking (§6.5); persona tests | 2 |
 | **4. Feed & widgets** | `getFeed`, `/api/feed` (with new-item diff), default widget layout incl. Top for you, guest context, Popular fallback, onboarding preview wiring, related-topic suggestions, impression/click logging | 3 + onboarding UI |
