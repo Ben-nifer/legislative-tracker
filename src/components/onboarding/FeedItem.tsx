@@ -21,8 +21,10 @@ function Meta({ item }: { item: Item }) {
 
 const external = (href: string) => /^https?:\/\//.test(href)
 
-// Home page / See all: a full-width row inside the section's card
-export function FeedItemRow({ item }: { item: Item }) {
+// Home page / See all: a full-width row inside the section's card. The data
+// attributes let FeedClickLogger attribute a home-page click to its impression.
+export function FeedItemRow({ item, widgetKey }: { item: Item; widgetKey?: string }) {
+  const data = widgetKey ? { 'data-feed-widget': widgetKey, 'data-feed-item': item.id } : {}
   const body = (
     <>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -38,11 +40,11 @@ export function FeedItemRow({ item }: { item: Item }) {
   const className =
     'flex items-center gap-3 border-b border-civic-divider px-4 py-[13px] text-civic-ink no-underline last:border-b-0 hover:bg-civic-bg focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-civic-accent'
   return external(item.href) ? (
-    <a href={item.href} className={className} aria-label={`Open ${item.title}`} target="_blank" rel="noopener noreferrer">
+    <a href={item.href} className={className} aria-label={`Open ${item.title}`} target="_blank" rel="noopener noreferrer" {...data}>
       {body}
     </a>
   ) : (
-    <Link href={item.href} className={className} aria-label={`Open ${item.title}`}>
+    <Link href={item.href} className={className} aria-label={`Open ${item.title}`} {...data}>
       {body}
     </Link>
   )

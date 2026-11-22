@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { WidgetItem } from '../ranking/score'
 import { resolveInterest, type ScheduleTask } from '../embeddings/interests'
 import { contextLabel, itemHref, statusLabel, typeLabel } from './display'
+import { impressionRows, insertImpressions, type ImpressionLog } from './impressions'
 import type { FeedContext, FeedItem, FeedResponse, FeedWidget, WidgetKind } from './types'
 
 // getFeed (recommendations-planv1.2.md §7.1): the user's widgets in layout order
@@ -19,7 +20,8 @@ export interface GetFeedOptions {
   previous?: { widgets: string[]; pairs: string[] } // what the preview showed last ("widgetKey|itemId")
   lists?: boolean // Tracked, Trending and Friend activity (home page)
   now?: Date
-  schedule?: ScheduleTask // runs a pending Haiku place parse after the response
+  schedule?: ScheduleTask // runs a pending Haiku place parse (and the impression insert) after the response
+  log?: ImpressionLog // record what was shown in feed_impressions (§3.5)
 }
 
 interface Planned {
@@ -51,6 +53,8 @@ type RawItem = {
   nextEventAt: string | null
   label?: string | null
   personal?: boolean
+  score?: number // shared widgets only; Tracked and Friend activity aren't scored
+  signals?: WidgetItem['signals']
 }
 
 const LIST_COLUMNS = 'id, title, item_type, stage, url, legislation_id, next_event_at, last_activity_at'
@@ -73,6 +77,8 @@ const fromWidgetItem = (i: WidgetItem): RawItem => ({
   url: i.url,
   legislationId: i.legislationId,
   nextEventAt: i.nextEventAt,
+  score: i.score,
+  signals: i.signals,
 })
 
 export function isPopular(ctx: FeedContext): boolean {
@@ -274,7 +280,7 @@ export async function getFeed(service: SupabaseClient, ctx: FeedContext, opts: G
     for (const r of data ?? []) neighborNames.set(r.place_id, r.name)
   }
 
-  type Built = Omit<FeedWidget, 'items'> & { raw: RawItem[] }
+  type Built = Omit<FeedWidget, 'items'> & { raw: RawItem[]; configVersion?: number | null }
   const built: Built[] = planned.map((p) => {
     const items = (cache.get(p.key)?.items ?? []).map(fromWidgetItem)
     let raw = items.slice(0, size)
@@ -297,18 +303,20 @@ export async function getFeed(service: SupabaseClient, ctx: FeedContext, opts: G
       total: p.comingSoon ? 0 : Math.max(items.length, raw.length),
       comingSoon: p.comingSoon,
       nearby,
+      configVersion: cache.get(p.key)?.configVersion ?? null,
     }
   })
 
   // Home page lists: Tracked → Trending → Friend activity (design export S6)
   const trending = (cache.get('trending')?.items ?? []).map(fromWidgetItem)
+  const trendingVersion = cache.get('trending')?.configVersion ?? null
   if (popular) {
-    if (trending.length) built.push({ key: 'trending', kind: 'trending', title: 'Trending', raw: trending.slice(0, size), total: trending.length, comingSoon: null, nearby: null })
+    if (trending.length) built.push({ key: 'trending', kind: 'trending', title: 'Trending', raw: trending.slice(0, size), total: trending.length, comingSoon: null, nearby: null, configVersion: trendingVersion })
   } else if (opts.lists) {
     const tracked = ctx.userId ? await trackedItems(service, ctx.userId, size) : { items: [], total: 0 }
     const friends = ctx.userId ? await friendItems(service, ctx.userId, size) : { items: [], total: 0, followsSomeone: false }
     built.push({ key: 'tracked', kind: 'tracked', title: 'Tracked', raw: tracked.items, total: tracked.total, comingSoon: null, nearby: null })
-    if (trending.length) built.push({ key: 'trending', kind: 'trending', title: 'Trending', raw: trending.slice(0, size), total: trending.length, comingSoon: null, nearby: null })
+    if (trending.length) built.push({ key: 'trending', kind: 'trending', title: 'Trending', raw: trending.slice(0, size), total: trending.length, comingSoon: null, nearby: null, configVersion: trendingVersion })
     built.push({ key: 'friend_activity', kind: 'friends', title: 'Friend activity', raw: friends.items, total: friends.total, comingSoon: null, nearby: null })
   }
 
@@ -328,7 +336,8 @@ export async function getFeed(service: SupabaseClient, ctx: FeedContext, opts: G
   const added = { titles: [] as string[], items: 0 }
   let newPairs = 0
 
-  const widgets: FeedWidget[] = built.map(({ raw, ...w }) => {
+  const logged: Parameters<typeof impressionRows>[0] = []
+  const widgets: FeedWidget[] = built.map(({ raw, configVersion, ...w }) => {
     const sectionIsNew = diff && !prevWidgets.has(w.key)
     if (sectionIsNew) added.titles.push(w.title)
     const items: FeedItem[] = raw.map((i) => {
@@ -349,9 +358,20 @@ export async function getFeed(service: SupabaseClient, ctx: FeedContext, opts: G
         isNew,
       }
     })
+    logged.push({
+      key: w.key,
+      configVersion: configVersion ?? null,
+      items: raw.map((i, n) => ({ id: i.id, score: i.score ?? 0, signals: i.signals ?? {}, label: items[n].label, isNew: items[n].isNew })),
+    })
     return { ...w, items }
   })
   if (!added.titles.length) added.items = newPairs
+
+  if (opts.log) {
+    const rows = impressionRows(logged, opts.log, diff)
+    if (opts.schedule) opts.schedule(() => insertImpressions(service, rows))
+    else await insertImpressions(service, rows)
+  }
 
   const versions = [...cache.values()].map((c) => c.configVersion).filter((v): v is number => v != null)
   return { popular, widgets, added, configVersion: versions.length ? Math.max(...versions) : null }

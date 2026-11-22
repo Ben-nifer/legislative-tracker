@@ -6,6 +6,7 @@ import { feedRateLimit } from '@/lib/rate-limit'
 import { getFeed } from '@/lib/feed/getFeed'
 import { contextFromGuest, loadUserContext } from '@/lib/feed/context'
 import { GUEST_CONTEXT_COOKIE, parseGuestContext, selectionsSchema } from '@/lib/onboarding/guest'
+import { SESSION_ID_COOKIE, readSessionId } from '@/lib/onboarding/session'
 
 // POST /api/feed (recommendations-planv1.2.md §7.3): the onboarding preview and
 // client refreshes. `context` is the onboarding selection in progress (guest
@@ -41,15 +42,19 @@ export async function POST(request: Request) {
     data: { user },
   } = await (await createServerSupabaseClient()).auth.getUser()
   const service = createServiceClient()
+  const cookieStore = await cookies()
+  const sessionId = readSessionId(cookieStore.get(SESSION_ID_COOKIE)?.value)
 
   const ctx = context
     ? contextFromGuest(context, user?.id ?? null)
     : user
       ? await loadUserContext(service, user.id)
-      : contextFromGuest(parseGuestContext((await cookies()).get(GUEST_CONTEXT_COOKIE)?.value))
+      : contextFromGuest(parseGuestContext(cookieStore.get(GUEST_CONTEXT_COOKIE)?.value))
 
   try {
-    return NextResponse.json(await getFeed(service, ctx, { size, lists, previous, schedule: after }))
+    // The preview refreshes on every toggle, so only newly shown items are logged
+    const log = sessionId ? { surface: 'onboarding_preview' as const, sessionId, userId: user?.id ?? null, onlyNew: true } : undefined
+    return NextResponse.json(await getFeed(service, ctx, { size, lists, previous, schedule: after, log }))
   } catch (error) {
     console.error('Feed failed:', error instanceof Error ? error.message : error)
     return NextResponse.json({ error: 'Could not load the feed right now' }, { status: 502 })

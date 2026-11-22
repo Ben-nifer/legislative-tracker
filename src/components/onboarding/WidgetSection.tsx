@@ -79,7 +79,7 @@ export function WidgetSection({ widget, headingLevel = 2 }: { widget: FeedWidget
         )}
       </div>
       <div className="flex flex-col overflow-hidden rounded-[14px] border border-civic-border bg-civic-surface">
-        {widget.items.length ? widget.items.map((item) => <FeedItemRow key={item.id} item={item} />) : <EmptyPanel widget={widget} />}
+        {widget.items.length ? widget.items.map((item) => <FeedItemRow key={item.id} item={item} widgetKey={widget.key} />) : <EmptyPanel widget={widget} />}
       </div>
     </section>
   )

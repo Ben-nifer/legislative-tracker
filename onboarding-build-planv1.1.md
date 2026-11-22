@@ -256,7 +256,7 @@ There is **no "Top for you"** (recommendations plan D23). Order per recommendati
 | **B1. Plumbing** | `resolveAddress` (Geoclient), `neighborhoods` table + seed, Mayor record, coverage registry, guest cookie, flags, `analytics_events`, sign-in carry-over + auto-username | Recs Phase 1 (`user_places` etc.) | Recs Phase 2 |
 | **B2. Screens on fixtures** | S0–S4, live preview, sign-in sheet, S6 + widget home page, all reading fixtures | B0 mockup update, B1 | Recs Phase 3 |
 | **B3. Neighborhood adapter** | DOT/ULURP → `content_items` with NTA tags | Recs Phase 1, B1 (`neighborhoods`) | Recs Phase 2–3 |
-| **B4. Integration** | Swap fixtures for the real `resolveInterest`, `getActivePoliticians`, `getFeed` | Recs Phases 2–4 | — |
+| **B4. Integration** | ✅ Done (§13): the screens were built on the real interfaces in B2 | Recs Phases 2–4 | — |
 | **B5. Launch** | E2E + accessibility pass on a Vercel preview → flip `NEXT_PUBLIC_FLAG_NEW_ONBOARDING` → monitor funnels → remove old home code after 2 stable weeks | B4 | Recs Phase 5 |
 
 **Overall order across both plans:**
@@ -372,3 +372,8 @@ One short section per finished phase: what shipped, decisions made during the bu
 - **District → NTA crosswalk** for Land Use items (Phase 3 note): depends on Q8.
 - After approval: apply 027, enable the source, run `backfill:neighborhood`, then `backfill:embeddings` (or wait for the cron) and `rank:widgets`. Neighborhood then shows as live in `getCoverage()`.
 
+### Phase B4 — Integration ✅ (2026-11-22)
+
+**Nothing to swap:** B2 was built on the real `getFeed` / `POST /api/feed`, `resolveInterest` (`/api/interests/resolve`) and `/api/politicians/active`, so no fixtures ever existed. What B4 added: recs Phase 4 part 2 (impression and click logging; see the recommendations plan's Done log) is wired into both surfaces. The home page logs impressions and opened cards; the preview logs newly shown items. Checked on a local production build with the flag on.
+
+**Left open (moves to B5):** smoke test on a Vercel preview with the flag on (sign-in from the sheet, carry-over, a gated stance, `/api/events`, `/api/feed/click`); Playwright E2E and axe. Neighborhood stays "Coming soon" until B3's migration 027 is applied and the source is enabled.

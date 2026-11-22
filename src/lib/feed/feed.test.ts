@@ -3,6 +3,7 @@ import { contextLabel, itemHref, statusLabel, typeLabel } from './display'
 import { previewCountLabel } from './announce'
 import { contextFromGuest } from './context'
 import { isPopular } from './getFeed'
+import { impressionRows } from './impressions'
 import type { FeedWidget } from './types'
 
 // Thursday 2026-11-19, noon in New York
@@ -92,5 +93,34 @@ describe('feed context', () => {
     const ctx = contextFromGuest({ v: 1, places: [{ type: 'council_district', id: '39' }], jurisdictions: [], legislatorIds: [], topicIds: [], interests: [] })
     expect(isPopular(ctx)).toBe(true)
     expect(isPopular(contextFromGuest(null))).toBe(true)
+  })
+})
+
+describe('impression rows', () => {
+  const widgets = [
+    {
+      key: 'jurisdiction:city',
+      configVersion: 2,
+      items: [
+        { id: 'a', score: 0.9, signals: { importance: 0.8, recency: 1 }, label: 'Hearing Thursday', isNew: false },
+        { id: 'b', score: 0.7, signals: { importance: 0.5 }, label: null, isNew: true },
+      ],
+    },
+    { key: 'tracked', configVersion: null, items: [{ id: 'c', score: 0, signals: {}, label: null, isNew: true }] },
+  ]
+  const log = { surface: 'home' as const, sessionId: 'sid123', userId: null }
+
+  it('logs every item with its 1-based position, score and weights version', () => {
+    const rows = impressionRows(widgets, log, false)
+    expect(rows).toHaveLength(3)
+    expect(rows[0]).toMatchObject({ widget: 'jurisdiction:city', content_item_id: 'a', position: 1, score: 0.9, reason: 'Hearing Thursday', config_version: 2, session_id: 'sid123' })
+    expect(rows[1].position).toBe(2)
+    expect(rows[2]).toMatchObject({ widget: 'tracked', position: 1, config_version: null })
+  })
+
+  it('logs only newly shown items on a preview refresh', () => {
+    const preview = { ...log, surface: 'onboarding_preview' as const, onlyNew: true }
+    expect(impressionRows(widgets, preview, true).map((r) => r.content_item_id)).toEqual(['b', 'c'])
+    expect(impressionRows(widgets, preview, false)).toHaveLength(3) // first load: everything is new
   })
 })

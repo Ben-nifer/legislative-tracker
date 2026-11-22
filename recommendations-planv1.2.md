@@ -466,7 +466,7 @@ It derives the user's widget list from their follows (or the guest session), rea
 | **1. Content layer** | ✅ Done (§14) | — |
 | **2. Embeddings** | ✅ Done (§14) | 1 |
 | **3. Shared ranking** | ✅ Done (§14); neighborhood "Nearby" fallback waits on NTA adjacency (build plan B1) | 2 |
-| **4. Feed & widgets** | `getFeed`, `/api/feed` (with new-item diff), default layout (§7.2), guest session, zero-selection view, onboarding preview wiring, related-topic suggestions, impression/click logging | 3 + onboarding UI |
+| **4. Feed & widgets** | ✅ Done (§14); §9 load test still open | 3 + onboarding UI |
 | **5. Tuning** | Ranking inspector, weights editor, signal performance panel, calibration view, phrase review list, source health, S3 party-mix audit | 4 |
 | **6. More importance signals** (later) | News-mention source and NYC lobbying adapter feeding importance (§15) | 3 |
 
@@ -631,6 +631,21 @@ Built to the **v1.1** Phase 2 scope, before v1.2 landed. The v1.2 additions to P
 - Topic order for signed-in users interleaves chips and typed interests by `created_at`; the guest cookie keeps them apart, so guests get chips first.
 
 **Left open:** impression/click logging (§3.5), related-topic suggestions on the home page, and the §9 load test. Mobile and preview performance measured only from a laptop (~180–650 ms per feed).
+
+
+### Phase 4 — Feed & widgets, part 2 ✅ (2026-11-22)
+
+**Shipped:** impression and click logging (§3.5, D17). `src/lib/feed/impressions.ts` (`impressionRows`, `insertImpressions`, `recordClick`). `getFeed` takes `log: { surface, sessionId, userId, onlyNew }` and writes one `feed_impressions` insert per feed load through `after()`, so the response never waits on it. The home page logs `home` and `POST /api/feed` logs `onboarding_preview`. `POST /api/feed/click` and the `FeedClickLogger` client wrapper send a beacon when a home card is opened. 2 new tests. Verified against a production build and the live DB with a test session: the home page logged 5 rows (positions 1–5, weights v2, importance/recency signals); the first preview load logged 3; an unchanged refresh logged 0; one click attached and one unmatched click was ignored. The test rows were deleted.
+
+**Decisions made during the build:**
+- **Clicks find their impression instead of carrying its ID.** The click endpoint attaches to this `sid`'s latest impression of the same item in the same widget from the last 24 h. Returning impression IDs would have meant awaiting the insert before render.
+- **The preview logs only newly shown items** (`onlyNew`): it reloads on every toggle, and re-logging the same cards would inflate impressions. Its cards aren't links, so it has no clicks.
+- **Tracked and Friend activity are logged** with score 0, `{}` signals and no config version, so CTR by widget type covers them. Positions are 1-based within each widget. `reason` is the card's context label.
+- Only `open` is logged. `stance` / `bookmark` / `follow` after opening a card would need the item page to know where the visit came from. "See all" pages aren't logged (`surface` allows `home` and `onboarding_preview` only).
+- **Related-topic suggestions** are the S4 tap-to-add buttons (D18), already shipped. Suggestions on the home page are suggestion cards, which D1 puts later.
+- No session ID → no logging. The middleware sets `sid` on the first response, and a new guest's first `/` visit is redirected to `/welcome` anyway.
+
+**Left open:** 180-day retention and the daily click-through rollup (build with the Phase 5 signal panel); the §9 p95 load test on a 300k-item synthetic table; attributing stance/bookmark/follow clicks.
 
 ---
 

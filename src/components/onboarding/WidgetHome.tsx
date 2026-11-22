@@ -1,14 +1,17 @@
 import Link from 'next/link'
 import { cookies } from 'next/headers'
+import { after } from 'next/server'
 import { createServerSupabaseClient, createServiceClient } from '@/lib/supabase/server'
 import { getFeed } from '@/lib/feed/getFeed'
 import { contextFromGuest, loadUserContext } from '@/lib/feed/context'
 import { GUEST_CONTEXT_COOKIE, parseGuestContext } from '@/lib/onboarding/guest'
+import { SESSION_ID_COOKIE, readSessionId } from '@/lib/onboarding/session'
 import { getCoverage } from '@/lib/onboarding/data/coverage'
 import CivicHeader from './CivicHeader'
 import { ComingSoonPill, WidgetSection } from './WidgetSection'
 import { BuildFeedBanner, CustomizeHint, SaveFeedPrompt } from './HomePrompts'
 import { civicFontClasses } from './fonts'
+import FeedClickLogger from './FeedClickLogger'
 
 // S6 / the widget home page (build plan §6, design export "Here's your page"):
 // the user's sections at 5 items, then Tracked → Trending → Friend activity.
@@ -20,17 +23,24 @@ export default async function WidgetHome() {
     data: { user },
   } = await supabase.auth.getUser()
   const service = createServiceClient()
+  const cookieStore = await cookies()
+  const sessionId = readSessionId(cookieStore.get(SESSION_ID_COOKIE)?.value)
 
   const [ctx, profile, coverage] = await Promise.all([
     user
       ? loadUserContext(service, user.id)
-      : Promise.resolve(contextFromGuest(parseGuestContext((await cookies()).get(GUEST_CONTEXT_COOKIE)?.value))),
+      : Promise.resolve(contextFromGuest(parseGuestContext(cookieStore.get(GUEST_CONTEXT_COOKIE)?.value))),
     user
       ? service.from('user_profiles').select('display_name, avatar_url').eq('id', user.id).maybeSingle().then((r) => r.data)
       : Promise.resolve(null),
     getCoverage(service),
   ])
-  const feed = await getFeed(service, ctx, { size: 5, lists: true })
+  const feed = await getFeed(service, ctx, {
+    size: 5,
+    lists: true,
+    schedule: after,
+    log: sessionId ? { surface: 'home', sessionId, userId: user?.id ?? null } : undefined,
+  })
 
   const popular = feed.popular
   return (
@@ -59,11 +69,11 @@ export default async function WidgetHome() {
         {user && popular && <BuildFeedBanner />}
         {!user && !popular && <SaveFeedPrompt />}
 
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(min(340px,100%),1fr))] items-start gap-5">
+        <FeedClickLogger className="grid grid-cols-[repeat(auto-fill,minmax(min(340px,100%),1fr))] items-start gap-5">
           {feed.widgets.map((w) => (
             <WidgetSection key={w.key} widget={w} />
           ))}
-        </div>
+        </FeedClickLogger>
 
         {(!coverage.federal || !coverage.state) && (
           <div className="flex flex-wrap items-center gap-3 rounded-[14px] border border-dashed border-civic-dash bg-civic-sunken px-4 py-3.5">
