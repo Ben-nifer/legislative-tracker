@@ -355,7 +355,7 @@ In every scored widget, **at most 2 items with the same primary sponsor among th
 
 ### 6.6 Item labels
 
-Since rankings are shared, the **widget header** carries the "why" ("Because you follow Housing", "Park Slope"). Items carry **context labels** instead of personal reasons: "Hearing Thursday", "Passed committee", "Trending", "42 people weighed in", and "New ·" in the onboarding preview.
+Since rankings are shared, the **widget header** is just the widget's name ("Housing", "Park Slope"); there is no "Because you follow" text anywhere (onboarding spec v1.2 §6.1). Items carry **context labels** instead of personal reasons: "Hearing Thursday", "Passed committee", "Trending", "42 people weighed in", and "New ·" in the onboarding preview.
 
 ### 6.7 Politician ranking for onboarding S3 (D20)
 
@@ -481,7 +481,7 @@ It derives the user's widget list from their follows (or the guest session), rea
 | §7.2 item 5 | Vector store decided: **pgvector in Supabase**, embeddings from **Voyage AI** |
 | §S3 "Active in…" politician suggestions | Activity score defined in §6.7 (news volume added once a news adapter exists) |
 | §S4 adjacency feedback | Related topics are **tap-to-add suggestions**, not auto-added (D18) |
-| §6 live preview / provenance tags | Picking a topic or politician **adds a widget** instead of re-ranking banners; "Matches: X" / "Because you follow X" move from items to the **widget header** (D22, §6.6) |
+| §6 live preview / provenance tags | Picking a topic or politician **adds a widget** instead of re-ranking banners; "Matches: X" / "Because you follow X" are dropped; the **widget title** names it (D22, §6.6, spec v1.2 §6.1) |
 | §7.3 Popular feed | NYC + Trending widgets (§6.8) |
 
 ---

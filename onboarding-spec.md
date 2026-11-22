@@ -1,6 +1,6 @@
 # Onboarding Specification — Civic Engagement App (name TBD)
 
-**Status:** Draft v1.1 · 2026-11-08 · All interview questions answered and all proposals approved. Remaining TBDs: topic-list owner (launch blocker), metric targets (post-launch).
+**Status:** Draft v1.2 · 2026-11-22 · **v1.2:** aligned with the "Civic App Onboarding" design export (`design/civic-app-onboarding.html`): every pick adds a section titled by name only, cards are links with no stance controls (§6.1). Remaining TBDs: topic-list owner (launch blocker), metric targets (post-launch).
 **Source:** Meeting notes "civic engagement platform: onboarding flow and core features" (2026-11-08), plus product-owner interview answers.
 **Scope:** First-run experience from app open to "Here's your page", including the deferred account prompt. Covers Web (responsive) and iOS.
 
@@ -92,12 +92,13 @@ Progress indicator: "Step n of 4" across S1–S4. S0, S5 and S6 are not counted.
 
 ### S2 — Jurisdictions
 - **Prompt:** "What do you want to keep up with?"
-- **Options:** Four toggle cards: Federal, New York State, New York City, and Neighborhood (prefilled with the resolved neighborhood name). **All start unselected.** **[DECIDED: suggest only, opt-in]**
+- **Prompt helper:** "Pick any. Each one adds a section to your feed."
+- **Options:** Toggle cards: Federal, New York State, New York City, and the resolved neighborhood (e.g. "Park Slope"). The neighborhood card appears **only after an address resolves**. **All start unselected.** **[DECIDED: suggest only, opt-in]** Levels without data yet show as disabled "Coming soon" cards that still carry the "Yours" badge and the user's districts.
 - **Outside NYC:** Two cards: Federal and [User's state]. City and Neighborhood cards are hidden. An "Add NYC" search remains available.
 - If an address was resolved, cards carry a **"Yours"** badge and show the user's district, e.g., "NY State · Senate District 20, Assembly District 44".
 - **"Add another neighborhood"** search opens a typeahead over NYC neighborhoods. It supports multiple selections.
-- **Select-all affordance:** A "Select all of mine" text button, so users can opt in quickly without being defaulted in. **[DECIDED]**
-- **Live preview:** Each selected level adds its jurisdiction banner to the preview (§6).
+- **Select-all affordance:** A "Select all of mine" text button, shown once an address resolves, so users can opt in quickly without being defaulted in. It selects live levels only. **[DECIDED]**
+- **Live preview:** Each selected level adds its own section to the preview (§6).
 - **Skip:** Allowed. With zero jurisdictions selected, the feed falls back to Popular at all levels.
 
 ### S3 — Politicians
@@ -112,7 +113,9 @@ Progress indicator: "Step n of 4" across S1–S4. S0, S5 and S6 are not counted.
      - Run a periodic audit of the party mix in trending suggestions against the party mix in each legislative body. Flag large skews for review, but don't auto-correct them.
 - **Card:** Photo, name, office, district, party (text label, not color-coded) **[DECIDED]**, and a one-line "recent activity" hook. The follow toggle is **off by default**.
 - **Search:** "Find someone else" covers any politician in coverage.
-- **Live preview:** Following someone injects their recent bills/activity into the preview, tagged "Because you follow X".
+- **Prompt helper:** "Each person you follow adds their own section to your feed."
+- **Representatives layout:** Council Member and Mayor with Follow toggles, then one disabled "Coming soon" card per state/federal office (State Senator, Assembly Member, U.S. Representative, two U.S. Senators). The "Active…" heading reads "Active in your jurisdictions" once a jurisdiction is selected, else "Active in New York City".
+- **Live preview:** Following someone adds a section titled "[Name] · [Office]" holding their items.
 - **Skip:** Allowed.
 - **Ships in v1.** **[DECIDED]** A `onboarding.step.politicians` flag exists only as an operational kill switch (on by default).
 
@@ -120,9 +123,10 @@ Progress indicator: "Step n of 4" across S1–S4. S0, S5 and S6 are not counted.
 - **Prompt:** "What issues do you care about?"
 - **Suggested chips:** ~12–16 chips ranked by (a) topics that are active in the user's selected jurisdictions and followed politicians' bills, then (b) platform-wide popularity. Chips are neutral nouns ("Housing", "Transit", "Public health"), never stance-laden ("Stop X"). **[DECIDED]**
 - **Free text:** "Add your own…" accepts any phrase (e.g., "high-speed rail", "COVID", "LGBTQ rights"). Matches resolve to topics in real time (see §7.2 for the performance design). **[DECIDED: chips + free text, must scale]**
-- **Adjacency feedback:** After a free-text add, show what it matched, e.g., *"High-speed rail → also showing Northeast Corridor, Amtrak funding"*. The user can remove an adjacent topic. **[DECIDED]**
-- **Selected chips** appear in a removable tray.
-- **Live preview:** The feed re-ranks so interest-matching items rise, each tagged "Matches: Transit".
+- **Prompt helper:** "Each topic adds its own section to your feed." Under "Add your own": "Add a place to narrow it, e.g. 'housing legislation in California'."
+- **Adjacency feedback:** After a free-text add, a result box shows the section's title ("bike lanes · Park Slope") and "Matched N items. Added as its own section." (or "No matches yet…"). An uncovered place shows "Coming soon" and "We don't cover California yet. We added the section; it fills in once we do." Related topics appear as tap-to-add buttons ("+ Transit"), never auto-added. **[DECIDED]**
+- **Selected chips** stay highlighted in the chip list; typed interests join it as selected chips with a × to remove.
+- **Live preview:** Each chip or typed interest adds its own section, titled by the topic name.
 - **Skip:** Allowed.
 - **Ships in v1.** **[DECIDED]** A `onboarding.step.interests` flag exists only as an operational kill switch (on by default). This makes the §7.2 topic graph and embedding index a v1 dependency.
 
@@ -134,8 +138,9 @@ Progress indicator: "Step n of 4" across S1–S4. S0, S5 and S6 are not counted.
 - Web: no push notifications and no notification prompt in v1. S5 is iOS-only. **[DECIDED]**
 
 ### S6 — "Here's your page"
-- **Headline:** "Here's your page. You can customize it anytime." **[DECIDED copy, from notes]**
-- The full feed (the preview, promoted to full screen), plus a dismissible coach mark that points at the customize entry point.
+- **Headline:** "Here's your page", subline "You can customize it anytime.", and a **Customize** button. **[DECIDED copy, from notes]** With nothing selected: "Popular right now", "Personalize it in about a minute." and a **Personalize** button that re-enters at S1.
+- The user's sections (5 items each, "See all"), then **Tracked** ("Nothing tracked yet: open any item and follow it or take a stance there"), **Trending**, and **Friend activity** ("No friend activity yet"). On web each section has a small uppercase kind label (Jurisdiction, Neighborhood, Topic, Politician, Your list, Everyone) and sections sit in a responsive grid. A "Coming soon" strip notes that Federal and New York State join automatically once covered.
+- A dismissible coach mark points at the customize entry point.
 - **Account prompt** appears here as a non-blocking banner/sheet (§8).
 
 ## 6. Live preview (the "feed builds as you go" mechanic)
@@ -144,12 +149,17 @@ Progress indicator: "Step n of 4" across S1–S4. S0, S5 and S6 are not counted.
 - **Web ≥1024px:** Two columns. Survey on the left (~40%), live feed on the right (~60%), scrolling independently. The feed is interactive but read-only (no engagement before S6).
 - **Web <1024px and iOS:** A **peek card** pinned under each question shows the top 2–3 feed items and a count ("14 items in your feed"). Tapping it, or dragging the handle up, expands the full feed as a sheet. A persistent CTA in the sheet, **"Keep building"**, returns to the survey at the same step. **"Explore my feed"** exits to S6.
 
-**Structure:** The feed uses the home-feed structure from the meeting: **jurisdiction banners** (Federal → State → City → Neighborhood), each prepopulated with its top items by relevance (not a random firehose). Only selected jurisdictions show. With none selected, the Popular feed shows.
+**Structure:** The preview shows the user's **sections** in home-page order: jurisdictions, neighborhoods, topics, politicians (§6.1). Each shows its top 3 items. With none selected, the Popular feed shows ("Showing what's popular · N items").
 
 **Change feedback**
 - Newly inserted items animate in (fade + 8px slide, 200ms). Respect `prefers-reduced-motion` / iOS Reduce Motion by disabling the motion and keeping a brief highlight. **[DECIDED]**
-- Changes are announced to screen readers through a polite live region, e.g., "Added 5 items from New York City." **[DECIDED]**
-- Each item carries a provenance tag ("Because you follow…", "Matches: …", "Popular in NYC") so cause and effect are legible.
+- Changes are announced to screen readers through a polite live region, e.g., "Added 3 items from New York City · 2 sections · 6 items." **[DECIDED]**
+- Newly added items are outlined and labeled "New ·". The mobile peek card shows the first 2 items, each tagged with its section name.
+
+### 6.1 Sections and cards (v1.2, from the design export)
+- **Section titles are the name only:** "New York City", "Park Slope", "Housing", "bike lanes · Park Slope", "[Name] · Council Member". No "Because you follow" text anywhere, on sections or items.
+- **Item cards** show type · status, the title, and an optional context label ("Hearing Thursday", "Passed committee", "Trending", "42 people weighed in"). **No stance or engagement controls on cards.** The whole card is a link to the item's full page, where stances and comments happen.
+- A section for an uncovered place shows "Coming soon" with "We don't cover [place] yet. This section fills in automatically once we do."
 
 **Performance budgets [DECIDED]**
 | Trigger | p95 preview update |
@@ -192,7 +202,7 @@ Shown when the user skips everything, or skips S2 with no other selections. Bann
 
 **When it's offered [DECIDED: guest mode, prompt later]**
 1. At **S6**, as a non-blocking sheet: "Save your feed." [Continue with Apple] [Continue with Google] [Not now].
-2. **At the first gated action** (stance, like, comment, saving a follow beyond the session): a contextual sheet, "Sign in to take a stance on this bill." The pending action completes after sign-in. **[DECIDED]**
+2. **At the first gated action** (stance, like, comment, saving a follow beyond the session), which happens **on the item's full page** since cards carry no engagement controls (§6.1): a contextual sheet, "Sign in to take a stance on this bill." The pending action completes after sign-in. **[DECIDED]**
 
 **Rules**
 - "Not now" is always available. Guests keep browsing and their selections last for the session. **[DECIDED]**

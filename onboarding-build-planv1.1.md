@@ -178,7 +178,7 @@ Cadence: a weekly cron (this data changes slowly). Keeping these tables fresh wi
 
 ## 5. Screens
 
-Shared building blocks live in `src/components/onboarding/`: `StepShell` (progress, Skip, Back, "Explore my feed"), `LivePreview` (split view or peek card), `FeedBanner`, `FeedItemCard` (type · status, title, provenance tag, "New ·" marker), `ComingSoonCard`, `SignInSheet`.
+Shared building blocks live in `src/components/onboarding/`: `StepShell` (progress, Skip, Back, "Explore my feed"), `LivePreview` (split view or peek card), `FeedBanner`, `FeedItemCard` (type · status, title, context label, "New ·" marker; the whole card links to the item page, no stance controls, spec §6.1), `ComingSoonCard`, `SignInSheet`.
 
 | Screen | Build notes (behavior per spec; look per mockup) |
 |---|---|
@@ -202,7 +202,7 @@ Flag on: `src/app/page.tsx` renders the widget page for **everyone**: signed-in 
 |---|---|---|
 | 1 | Jurisdiction widgets: State → City (Federal when live) | Shared rankings; 5 items + "See all" |
 | 2 | Neighborhood widgets | Shared; "Nearby" top-up when thin |
-| 3 | Topic widgets (chips and typed interests) | Shared; header "Because you follow Housing" |
+| 3 | Topic widgets (chips and typed interests) | Shared; titled by name only ("Housing"), spec §6.1 |
 | 4 | Politician widgets | Shared |
 | 5 | Tracked | Signed-in only |
 | 6 | Trending | Everyone |
@@ -222,7 +222,8 @@ There is **no "Top for you"** (recommendations plan D23). Order per recommendati
 - **Scoped theme:** the mockup's tokens defined as CSS variables under a `.theme-civic` class applied to `/welcome` and the home page only:
   `--civic-bg #F6F5F1 · --civic-surface #FFFFFF · --civic-ink #15171C · --civic-muted #4A4F5A · --civic-border #DAD8D1 · --civic-accent #0B6B5D · --civic-accent-soft #E3F0EC · --civic-badge-bg #FBEBDD · --civic-badge-ink #9A4A0C`
 - **Fonts:** Inter (body) and Space Grotesk (headings) via `next/font`, loaded only on these routes.
-- **Header/nav:** the global header keeps the NYC theme for now. The visible jump between the home page and other pages is accepted (B5) until the app-wide restyle. **[OPEN] Q1**
+- **Header/nav:** `/welcome` is full-screen with its own minimal bar (logo, "Step n of 4", Skip). **The home page uses the design export's civic header** (logo, Home / Search / Watchlist, avatar), wired to the existing routes; every other page keeps today's NYC header until the app-wide restyle. **[DECIDED 2026-11-22]** **[OPEN] Q1** for the rest of the app.
+- **Design source:** `design/civic-app-onboarding.html` (iPhone flow, web S2 split view, web S6). Where it differs from this plan, the export wins and the spec (v1.2 §6.1) follows it.
 - The mockup still needs: a web S6, topic and politician widgets on S6, and widgets (not re-ranked banners) appearing as S3/S4 selections are made (recommendations plan Q6). Remove the "Top for you" peek idea.
 
 ---
