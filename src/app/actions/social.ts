@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createServerSupabaseClient, createServiceClient } from '@/lib/supabase/server'
 import { followRateLimit } from '@/lib/rate-limit'
+import { refreshWatchingCount } from '@/lib/engagement/stats'
 
 // ── Users ─────────────────────────────────────────────────────────────────────
 
@@ -183,16 +184,7 @@ export async function updateLegislationNotifySettings(
 }
 
 async function updateWatchingCount(legislationId: string) {
-  const service = createServiceClient()
-  const { count } = await service
-    .from('legislation_follows')
-    .select('*', { count: 'exact', head: true })
-    .eq('legislation_id', legislationId)
-
-  await service
-    .from('legislation_stats')
-    .update({ watching_count: count ?? 0 })
-    .eq('legislation_id', legislationId)
+  await refreshWatchingCount(createServiceClient(), legislationId)
 }
 
 // ── Topics ───────────────────────────────────────────────────────────────────

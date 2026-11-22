@@ -30,9 +30,11 @@ export const followRateLimit = new Ratelimit({
   prefix: 'rl:follow',
 })
 
+// Address lookups (profile finder, onboarding S1). Keyed by user ID, or IP for
+// guests; 20/hour leaves room for a few typos during onboarding.
 export const geocodeRateLimit = new Ratelimit({
   redis,
-  limiter: Ratelimit.slidingWindow(5, '1 h'),
+  limiter: Ratelimit.slidingWindow(20, '1 h'),
   prefix: 'rl:geocode',
 })
 
@@ -47,4 +49,11 @@ export const interestRateLimit = new Ratelimit({
   redis,
   limiter: Ratelimit.slidingWindow(60, '1 h'),
   prefix: 'rl:interest',
+})
+
+// Onboarding analytics batches (/api/events), keyed by IP
+export const eventsRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(600, '1 h'),
+  prefix: 'rl:events',
 })

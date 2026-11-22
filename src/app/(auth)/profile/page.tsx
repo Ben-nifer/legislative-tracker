@@ -13,7 +13,7 @@ export default async function ProfilePage() {
     .eq('id', user.id)
     .maybeSingle()
 
-  if (!profile) redirect('/onboarding')
+  if (!profile) redirect('/onboarding?next=/profile')
 
   redirect(`/users/${profile.username}`)
 }

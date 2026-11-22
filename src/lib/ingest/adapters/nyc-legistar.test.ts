@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   buildJointHearings,
   buildLandUseDecisions,
+  buildMayoralActors,
   classify,
   decisionOutcome,
   emptyContext,
   isLandUseResolution,
+  isMayoralAction,
   linkedLandUseFile,
   mapStage,
   parseCouncilDistricts,
@@ -354,5 +356,54 @@ describe('hearing dates', () => {
   it('never puts last activity in the future for other items either', () => {
     const item = toContentItem(row({ intro_date: '2026-12-01', last_action_date: '2026-12-01', legislation_history: [] }), NOW)
     expect(item?.lastActivityAt).toBe('2026-02-20T15:00:00+00:00')
+  })
+})
+
+describe('mayoral actors', () => {
+  const mayors = [
+    { externalId: 'manual:zohran-mamdani', termStart: '2026-01-01' },
+    { externalId: 'manual:previous-mayor', termStart: '2022-01-01' },
+  ]
+  const id = '11111111-1111-1111-1111-111111111111'
+
+  it('recognizes actions the Mayor takes, not ones sent to them', () => {
+    expect(isMayoralAction('Returned Unsigned by Mayor')).toBe(true)
+    expect(isMayoralAction('Vetoed by Mayor')).toBe(true)
+    expect(isMayoralAction('Hearing Held by Mayor')).toBe(true)
+    expect(isMayoralAction('Sent to Mayor by Council')).toBe(false)
+    expect(isMayoralAction('Hearing Scheduled by Mayor Cancelled')).toBe(false)
+  })
+
+  it('credits each action to the mayor in office on that date', () => {
+    const actors = buildMayoralActors(
+      [
+        { legislation_id: id, action_date: '2026-03-02', action_text: 'Returned Unsigned by Mayor' },
+        { legislation_id: id, action_date: '2026-03-02', action_text: 'Hearing Held by Mayor' },
+        { legislation_id: 'old', action_date: '2025-07-01', action_text: 'Signed Into Law by Mayor' },
+        { legislation_id: 'sent', action_date: '2026-02-01', action_text: 'Sent to Mayor by Council' },
+      ],
+      mayors
+    )
+    expect(actors.get(id)).toEqual(['manual:zohran-mamdani'])
+    expect(actors.get('old')).toEqual(['manual:previous-mayor'])
+    expect(actors.has('sent')).toBe(false)
+  })
+
+  it('ignores actions before any recorded term', () => {
+    const actors = buildMayoralActors(
+      [{ legislation_id: id, action_date: '2025-12-30', action_text: 'Vetoed by Mayor' }],
+      [mayors[0]]
+    )
+    expect(actors.size).toBe(0)
+  })
+
+  it('attaches the Mayor as an actor alongside the sponsors', () => {
+    const ctx = { ...emptyContext(), mayoralActors: new Map([[id, ['manual:zohran-mamdani']]]) }
+    const item = toContentItem(row(), NOW, ctx)
+    expect(item?.people).toEqual([
+      { legislatorExternalId: '101', role: 'primary_sponsor' },
+      { legislatorExternalId: '202', role: 'sponsor' },
+      { legislatorExternalId: 'manual:zohran-mamdani', role: 'actor' },
+    ])
   })
 })

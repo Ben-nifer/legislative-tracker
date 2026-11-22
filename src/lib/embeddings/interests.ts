@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { normalizePhrase } from './normalize'
+import { MAX_PHRASE_LENGTH, normalizePhrase } from './normalize'
 import {
   type Place,
   type PlaceType,
@@ -19,9 +19,8 @@ import type { WidgetItem } from '../ranking/score'
 // call in the request, and only the first time anyone types it. The optional
 // Haiku place parse runs after the response.
 
-export { normalizePhrase }
+export { MAX_PHRASE_LENGTH, normalizePhrase }
 
-export const MAX_PHRASE_LENGTH = 80
 const DEFAULT_ITEM_COUNT = 20
 const TOPIC_SUGGESTION_COUNT = 3
 

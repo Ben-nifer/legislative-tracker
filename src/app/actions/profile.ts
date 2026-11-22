@@ -1,8 +1,10 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { headers } from 'next/headers'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { geocodeRateLimit } from '@/lib/rate-limit'
+import { geocodeNycAddress } from '@/lib/geo/geoclient'
 
 function toSlug(text: string): string {
   return text
@@ -159,53 +161,28 @@ export async function lookupAddressDistrict(address: string): Promise<{
   communityBoard?: string
   error?: string
 }> {
-  const supabaseForAuth = await createServerSupabaseClient()
-  const { data: { user } } = await supabaseForAuth.auth.getUser()
-  if (user) {
-    const { success } = await geocodeRateLimit.limit(user.id)
-    if (!success) return { error: 'Too many requests. Please try again later.' }
-  }
+  const supabase = await createServerSupabaseClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  const ip = (await headers()).get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
+  const { success } = await geocodeRateLimit.limit(user?.id ?? `ip:${ip}`)
+  if (!success) return { error: 'Too many requests. Please try again later.' }
 
-  try {
-    // Step 1: GeoSearch to resolve address → BBL
-    const geoRes = await fetch(
-      `https://geosearch.planninglabs.nyc/v2/search?text=${encodeURIComponent(address)}&size=1`,
-      { signal: AbortSignal.timeout(8000) }
-    )
-    if (!geoRes.ok) return { error: 'Address lookup failed. Try a more specific address.' }
+  // NYC Geoclient (onboarding-build-planv1.1.md §4.1); the address isn't logged or kept
+  const result = await geocodeNycAddress(address)
+  if (result.status === 'unavailable') return { error: 'Address lookup is unavailable right now. Please try again.' }
+  if (result.status === 'not_found') return { error: 'Address not found in NYC. Please check the address and try again.' }
 
-    const geoData = await geoRes.json()
-    const bbl = geoData?.features?.[0]?.properties?.addendum?.pad?.bbl
-    if (!bbl) return { error: 'Address not found in NYC. Please check the address and try again.' }
+  const { councilDistrict, communityDistrict } = result.districts
+  const { data: legislator } = await supabase
+    .from('legislators')
+    .select('id, full_name, slug, district, borough, photo_url')
+    .eq('district', councilDistrict)
+    .eq('is_active', true)
+    .maybeSingle()
 
-    // Step 2: PLUTO dataset to get council district + community district from BBL
-    const plutoRes = await fetch(
-      `https://data.cityofnewyork.us/resource/64uk-42ks.json?bbl=${bbl}&$select=council,cd`,
-      { signal: AbortSignal.timeout(8000) }
-    )
-    if (!plutoRes.ok) return { error: 'Could not look up district information. Please try again.' }
+  if (!legislator) return { error: `No active council member found for District ${councilDistrict}.` }
 
-    const plutoData = await plutoRes.json()
-    const row = plutoData?.[0]
-    const district = row?.council ? Number(row.council) : null
-    const communityBoard = row?.cd ? formatCommunityDistrict(String(row.cd)) : undefined
-
-    if (!district) return { error: 'Could not determine your council district. Try a more specific address.' }
-
-    const supabase = await createServerSupabaseClient()
-    const { data: legislator } = await supabase
-      .from('legislators')
-      .select('id, full_name, slug, district, borough, photo_url')
-      .eq('district', district)
-      .eq('is_active', true)
-      .maybeSingle()
-
-    if (!legislator) return { error: `No active council member found for District ${district}.` }
-
-    return { legislator, communityBoard }
-  } catch {
-    return { error: 'Address not found. Please check the address and try again.' }
-  }
+  return { legislator, communityBoard: communityDistrict ? formatCommunityDistrict(communityDistrict) : undefined }
 }
 
 export async function saveCouncilMember(

@@ -79,7 +79,11 @@ export async function syncCouncilMembers(): Promise<number> {
       .map(l => [l.slug, l.district as number])
   )
 
-  const rows = relevantPersons.map(person => {
+  // Manual records (the Mayor, build plan B10) are never overwritten by the sync
+  const { data: manual } = await supabase.from('legislators').select('slug').eq('is_manual', true)
+  const manualSlugs = new Set((manual ?? []).map(l => l.slug as string))
+
+  const rows = relevantPersons.filter(person => !manualSlugs.has(toSlug(person.PersonFullName))).map(person => {
     const slug = toSlug(person.PersonFullName)
     const district = districtBySlug.get(slug)
     const photo_url = district != null

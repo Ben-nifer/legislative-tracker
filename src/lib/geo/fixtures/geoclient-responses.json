@@ -1,0 +1,62 @@
+{
+  "park-slope": {
+    "status": "OK",
+    "input": "200 5th Ave Brooklyn",
+    "results": [
+      {
+        "level": "0",
+        "status": "EXACT_MATCH",
+        "request": "address [houseNumber=200, street=5th Ave, borough=BROOKLYN, zip=null]",
+        "response": {
+          "assemblyDistrict": "52",
+          "bblBoroughCode": "3",
+          "boroughCode1In": "3",
+          "cityCouncilDistrict": "39",
+          "communityDistrict": "306",
+          "congressionalDistrict": "10",
+          "firstBoroughName": "BROOKLYN",
+          "nta": "BK37",
+          "nta2020": "BK0602",
+          "stateSenatorialDistrict": "26",
+          "zipCode": "11217"
+        }
+      }
+    ],
+    "parseTree": null,
+    "policy": null
+  },
+  "times-square": {
+    "status": "OK",
+    "input": "Times Square",
+    "results": [
+      {
+        "level": "1",
+        "status": "POSSIBLE_MATCH",
+        "request": "place [name=Times Square, borough=MANHATTAN, zip=null]",
+        "response": {
+          "assemblyDistrict": "75",
+          "bblBoroughCode": "1",
+          "boroughCode1In": "1",
+          "cityCouncilDistrict": "03",
+          "communityDistrict": "105",
+          "congressionalDistrict": "12",
+          "firstBoroughName": "MANHATTAN",
+          "message": "TIMES SQUARE IS ON RIGHT SIDE OF 8 AVENUE",
+          "nta": "MN17",
+          "nta2020": "MN0502",
+          "stateSenatorialDistrict": "28",
+          "zipCode": "10036"
+        }
+      }
+    ],
+    "parseTree": null,
+    "policy": null
+  },
+  "rejected-hoboken": {
+    "status": "REJECTED",
+    "input": "10 Main St Hoboken NJ",
+    "results": [],
+    "parseTree": null,
+    "policy": null
+  }
+}

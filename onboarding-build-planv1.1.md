@@ -287,7 +287,40 @@ Recs P1 ─► Recs P2 ─► Recs P3 ─► Recs P4 ─► Recs P5
 | # | Question | Why it matters |
 |---|---|---|
 | Q1 | When does the rest of the app move to the mockup's look (header, legislation pages, profile)? | Until then there's a style jump between home and other pages |
-| Q2 | Confirm Geoclient's response fields and terms during B1 | The district fields and NTA code must be what §4.1 assumes |
+| ~~Q2~~ | ~~Confirm Geoclient's response fields~~ **Resolved in B1:** v2 returns `cityCouncilDistrict`, `stateSenatorialDistrict`, `assemblyDistrict`, `congressionalDistrict`, `nta2020` (matches `places`) and `communityDistrict` | — |
 | Q3 | Who keeps DOT/ULURP data fresh after launch? The adapter only serves what's in `local_proposals` today | Neighborhood banners go stale over time without a refresh source |
-| Q4 | Schema drift: `user_profiles.council_member_id` and `community_board` exist in the database but not in any repo migration | New migrations should capture them so a fresh database matches production |
-| Q5 | Approve the **[PROPOSED]** items: session cookie for guest state (§3.3), GeoSearch for autocomplete (§4.1), PostGIS (§4.2), imprecise proposals excluded from neighborhoods (§4.8), env-var flags (§3.2), no geolocation on web (§5) | They shape B1 |
+| ~~Q4~~ | ~~Schema drift~~ **Resolved in B1:** 026 adds `council_member_id`, `community_board`, `notification_preferences` and `terms_accepted_at` with `if not exists` | — |
+| Q5 | ~~Approve the [PROPOSED] items~~ **Approved 2026-11-22:** session cookie (§3.3), GeoSearch autocomplete (§4.1), env-var flags (§3.2), no geolocation on web (§5). PostGIS was already enabled. Still open: imprecise proposals excluded from neighborhoods (§4.8), decide in B3 | — |
+
+---
+
+## 13. Done log
+
+One short section per finished phase: what shipped, decisions made during the build that this plan didn't cover, and anything left open.
+
+### Phase B1 — Plumbing (2026-11-22; migration 026 applied, seed pending)
+
+**Shipped:** migration `026_onboarding_plumbing.sql` (applied): `neighborhoods` (geometry + adjacency), `upsert_neighborhoods`, `refresh_neighborhood_adjacency`, `search_neighborhoods`, `coverage_levels`, `legislators.is_manual` + `term_start`, the Mayor record (Zohran Mamdani, term from 2026-01-01) with a `manual:zohran-mamdani` external ID, `analytics_events`, and the Q4 drift columns. `npm run seed:neighborhoods` loads NTA polygons from Open Data and computes adjacency. `src/lib/geo/geoclient.ts` (Geoclient v2). `src/lib/onboarding/`: guest cookie schema (`guest.ts`), session/pending cookies (`session.ts`), browser writers (`client-cookies.ts`), username generator, sign-in carry-over, and `data/` (`resolveAddress`, `searchNeighborhoods`, `getCoverage`, `getRepresentatives`), exposed as server actions in `src/app/actions/onboarding.ts`. `src/lib/analytics/` (allowlist + client batcher) and `POST /api/events`. `src/lib/flags.ts`. New auth callback; middleware session cookies and the flagged `/` → `/welcome` redirect. 35 new tests (119 total).
+
+**Decisions made during the build (product-owner answers unless noted):**
+- **Outside-NYC detection:** GeoSearch only knows NYC (it turns "10 Main St Hoboken NJ" into a Brooklyn address) and Geoclient rejects a Hoboken address and gibberish the same way. So **any rejection gets one combined message**: "couldn't place that address" plus the NYC-only note and StreetEasy link. `onb_address_result` is `success | failed | unavailable` (no `outside_nyc` / `non_us`).
+- **`neighborhoods` is geometry-only:** `nta_code` (FK to `places`), `borough`, `geometry`, `adjacent_ntas`. Names and aliases stay in `places`. Adjacency = same borough within ~10 m. `search_neighborhoods` also expands areas ("Harlem" → its NTAs).
+- **Coverage:** Neighborhood counts as live only with **NTA-tagged** items, so it shows "Coming soon" until B3 (the 949 Land Use items are tagged to council districts). Live today: City only.
+- **Mayor widget = mayoral actions:** the adapter attaches the Mayor as `actor` on items whose history has an action ending "by Mayor" (signed, vetoed, returned unsigned, hearing held, withdrawn), credited to the mayor in office on that date (`term_start`). Since 2026-01-01: 106 returned unsigned, 1 veto. The politician widget's ×0.6 non-primary factor applies to every actor item alike, so their order is unchanged. Party is null like every council member's.
+- **Rate limit:** address lookups are keyed by user ID, or IP for guests, at **20/hour** (was 5, signed-in only).
+- *(Mine)* **Session ID:** a separate `sid` session cookie set by middleware on every page, used by `analytics_events` / `feed_impressions`. `onb_session` stays a plain "has seen /welcome" marker, so a guest who lands on a bill page first still gets sent to S0 at `/`.
+- *(Mine)* **Guest cookie caps:** 12 politicians, 15 topics, 10 interests. JSON's structural characters stay unescaped to fit 3 KB; `writeGuestContext` returns false over the cap so the UI can say so.
+- *(Mine)* **Pending actions:** stance and save (follow) only. Comment text never goes in a cookie; the sheet returns the user to the bill instead.
+- *(Mine)* **Carry-over** runs on any sign-in with a guest cookie, not only the first: follows are added, resolved places replace the account's. It also fills `council_member_id` when the profile has none. Missing IDs are skipped; each step logs and never blocks sign-in.
+- *(Mine)* **Terms:** new accounts still pass through `/terms/accept` (they did before via the protected `/onboarding` route).
+- *(Mine)* **`/onboarding`** is now a route that creates a generated profile for a signed-in account without one (1 exists), then redirects. Auto-usernames are not behind the flag.
+- *(Mine)* `auth_success` has a `new_account` prop, so sign-ups and returning sign-ins can be told apart.
+- *(Mine)* The callback's `next` is restricted to same-site paths (it allowed `@host` before).
+
+**Left open:**
+- **Run** `npm run seed:neighborhoods`, `npm run backfill:content` (attaches the Mayor) and `npm run rank:widgets`.
+- Not exercised end-to-end: the auth callback (needs OAuth/magic link on a preview), `/api/events` and `resolveAddress` over HTTP (no local `KV_REST_API_*`). Smoke-test on the Vercel preview.
+- Fixtures for the four B1 interfaces weren't built (they're real now); B2 adds fixtures for `getActivePoliticians`, `resolveInterest`, `getFeed`.
+- GeoSearch autocomplete rewrites non-NYC addresses to NYC ones, so S1 must let users submit what they typed rather than force a suggestion (B2).
+- Existing gap, not changed: `/terms/accept` accepts `next=//host`.
+

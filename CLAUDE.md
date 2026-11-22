@@ -11,7 +11,7 @@
 
 > **Active work:** We're implementing **`recommendations-planv1.2.md`** phase by phase (content layer → embeddings → shared ranking → feed widgets → tuning). It builds on **`onboarding-spec.md`**; the screens and home-widget build is planned in **`onboarding-build-planv1.1.md`**. Read them before working on onboarding, the home feed, `src/lib/ingest/`, or anything touching `content_items`. Decisions marked [DECIDED] there are final; ask before deciding anything the plan doesn't cover.
 >
-> **Progress lives in the plan's §14 Done log.** Read it first to see which phases are finished and what was decided during each build. When you finish a phase, add a short entry there before committing: what shipped, decisions made that the plan didn't cover, and anything left open. Never apply a migration to Supabase without the user's explicit approval.
+> **Progress lives in the plans' Done logs** (recommendations plan §14, build plan §13). Read it first to see which phases are finished and what was decided during each build. When you finish a phase, add a short entry there before committing: what shipped, decisions made that the plan didn't cover, and anything left open. Never apply a migration to Supabase without the user's explicit approval.
 
 ### Core Value Proposition
 "Make NYC legislation accessible and engaging for everyday New Yorkers"
@@ -227,6 +227,15 @@ legislative-tracker/
 │   │   │   ├── politicians.ts    # Onboarding S3 activity ranking
 │   │   │   ├── precompute.ts     # 15-minute job → item_importance + widget_cache
 │   │   │   └── config.ts         # Active ranking_config
+│   │   ├── onboarding/           # Onboarding plumbing (onboarding-build-planv1.1.md §3–4)
+│   │   │   ├── guest.ts          # onb_ctx guest cookie schema
+│   │   │   ├── session.ts        # sid / onb_session / onb_pending cookies
+│   │   │   ├── carry-over.ts     # Guest choices → account at sign-in
+│   │   │   ├── username.ts       # Auto-generated usernames
+│   │   │   └── data/             # resolveAddress, searchNeighborhoods, getCoverage, getRepresentatives
+│   │   ├── geo/geoclient.ts      # NYC Geoclient v2 (address → districts)
+│   │   ├── analytics/            # Spec §11 event allowlist + client track()
+│   │   ├── flags.ts              # NEXT_PUBLIC_FLAG_* launch switches
 │   │   ├── ai/
 │   │   │   └── summarize.ts      # Claude API integration
 │   │   ├── moderation/
@@ -390,6 +399,14 @@ LEGISTAR_API_TOKEN=
 ANTHROPIC_API_KEY=
 OPENAI_API_KEY=
 VOYAGE_API_KEY=          # Embeddings (recommendations-planv1.2.md §5)
+
+# Geocoding
+NYC_GEOCLIENT_KEY=       # NYC Geoclient v2 (onboarding-build-planv1.1.md §4.1)
+
+# Feature flags (onboarding-build-planv1.1.md §3.2)
+NEXT_PUBLIC_FLAG_NEW_ONBOARDING=false
+NEXT_PUBLIC_FLAG_STEP_POLITICIANS=true
+NEXT_PUBLIC_FLAG_STEP_INTERESTS=true
 
 # Cron
 CRON_SECRET=

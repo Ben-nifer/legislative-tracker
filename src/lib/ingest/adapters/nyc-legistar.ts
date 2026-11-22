@@ -136,13 +136,45 @@ export interface AdapterContext {
   landUseTitles: Map<string, string> // LU file number → title
   landUseDecisions: Map<string, LandUseDecision> // LU file number → its Council decision
   jointHearings: Map<string, JointHearing> // any member's file number → its group
+  mayoralActors: Map<string, string[]> // legislation ID → external IDs of mayors who acted on it
 }
 
 export const emptyContext = (): AdapterContext => ({
   landUseTitles: new Map(),
   landUseDecisions: new Map(),
   jointHearings: new Map(),
+  mayoralActors: new Map(),
 })
+
+// Manual officials (build plan B10) are attached by "manual:<slug>" IDs
+export interface MayorTerm {
+  externalId: string
+  termStart: string // YYYY-MM-DD
+}
+
+// History actions the Mayor takes ("Signed Into Law by Mayor", "Vetoed by Mayor",
+// "Returned Unsigned by Mayor", "Hearing Held by Mayor"…). "Sent to Mayor by
+// Council" and "… by Mayor Cancelled" don't end this way.
+export const isMayoralAction = (actionText: string) => /\bby Mayor$/i.test(actionText.trim())
+
+// Credits each mayoral action to the mayor in office on that date, so a
+// predecessor's vetoes never land in the current Mayor's widget
+export function buildMayoralActors(
+  actions: { legislation_id: string; action_date: string | null; action_text: string }[],
+  mayors: MayorTerm[]
+): Map<string, string[]> {
+  const terms = [...mayors].sort((a, b) => b.termStart.localeCompare(a.termStart)) // latest first
+  const actors = new Map<string, string[]>()
+  for (const a of actions) {
+    if (!a.action_date || !isMayoralAction(a.action_text)) continue
+    const date = a.action_date.slice(0, 10)
+    const mayor = terms.find((m) => date >= m.termStart)
+    if (!mayor) continue
+    const list = actors.get(a.legislation_id) ?? []
+    if (!list.includes(mayor.externalId)) actors.set(a.legislation_id, [...list, mayor.externalId])
+  }
+  return actors
+}
 
 export function decisionOutcome(title: string): LandUseDecision['outcome'] {
   const t = title.trim()
@@ -272,6 +304,10 @@ export function toContentItem(
           legislatorExternalId: String(s.legislators!.legistar_id),
           role: s.is_primary ? ('primary_sponsor' as const) : ('sponsor' as const),
         }))
+  // The Mayor is an actor on items they signed, vetoed, returned unsigned or held a hearing on
+  for (const externalId of ctx.mayoralActors.get(row.id) ?? []) {
+    people.push({ legislatorExternalId: externalId, role: 'actor' })
+  }
 
   return {
     externalId: row.file_number,
@@ -365,7 +401,38 @@ async function loadContext(supabase: SupabaseClient, committeeNames: Map<string,
     landUseTitles,
     landUseDecisions: buildLandUseDecisions(resolutions.map(withCommittee), landUseTitles),
     jointHearings: buildJointHearings(hearings.map(withCommittee)),
+    mayoralActors: await loadMayoralActors(supabase),
   }
+}
+
+async function loadMayoralActors(supabase: SupabaseClient): Promise<Map<string, string[]>> {
+  const { data: mayors, error } = await supabase
+    .from('legislators')
+    .select('slug, term_start')
+    .eq('is_manual', true)
+    .eq('title', 'Mayor')
+    .not('term_start', 'is', null)
+  if (error) {
+    // Before migration 026 there are no manual records; ingest carries on without them
+    console.warn(`[nyc-legistar] mayor read failed, skipping mayoral actors: ${error.message}`)
+    return new Map()
+  }
+  const terms: MayorTerm[] = (mayors ?? []).map((m) => ({ externalId: `manual:${m.slug}`, termStart: m.term_start as string }))
+  if (!terms.length) return new Map()
+
+  const earliest = terms.map((t) => t.termStart).sort()[0]
+  const actions = await readAll<{ legislation_id: string; action_date: string | null; action_text: string }>(
+    'mayoral actions',
+    (from, to) =>
+      supabase
+        .from('legislation_history')
+        .select('legislation_id, action_date, action_text')
+        .ilike('action_text', '%by Mayor')
+        .gte('action_date', earliest)
+        .order('id')
+        .range(from, to)
+  )
+  return buildMayoralActors(actions, terms)
 }
 
 async function loadCommitteeNames(supabase: SupabaseClient): Promise<Map<string, string>> {
