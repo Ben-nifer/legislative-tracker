@@ -349,3 +349,26 @@ One short section per finished phase: what shipped, decisions made during the bu
 - The 7% of items without a headline show the long official title.
 - Mobile home page reuses the desktop header (wraps to two lines); the export only has a web S6.
 
+### Phase B3 — Neighborhood adapter (2026-11-22, built; migration not applied, source disabled)
+
+**Shipped:** migration `027_neighborhood_adapter.sql` (**written, not applied**): `local_proposal_rows(p_after, p_limit)`, a service-role read that pages `local_proposals` with the NTA codes its geometry intersects (`ST_Intersects` against `neighborhoods`), the latest history milestone and the ULURP/DOT detail rows; plus the `nyc-local-proposals` source row, **created disabled**. `src/lib/ingest/adapters/nyc-local-proposals.ts` maps rows per §4.8. `src/lib/ingest/index.ts` now groups adapters by cron: `ingestAllSources` (daily, Legistar) and `ingestNeighborhoodSources` (weekly). `/api/cron/ingest-neighborhood` on Mondays 07:30 UTC (after ingest-content, before embed-content and rank-widgets). `npm run backfill:neighborhood`. 17 new tests (145 total). Nothing in the feed, ranking or coverage code changed: `coverage_levels()` and the precompute's per-NTA widgets pick the items up as soon as they exist.
+
+**Decisions made during the build (mine, pending review):**
+- **Ships disabled.** Q8 and the Q5 remainder (below) change what gets written, so the runner skips the source until `update sources set enabled = true where slug = 'nyc-local-proposals'`.
+- **Precision follows the plan literally:** only `geometry_precise = true` rows get neighborhood tags, in one function (`hasPreciseGeometry`) so it's a one-line change. Imprecise rows are still ingested as neighborhood-level items with no places (they can still surface in topic/interest widgets via embeddings).
+- **Stages:** ZAP Filed / Noticed → `introduced`; In Public Review → `in_committee`; Completed → `enacted` (ZAP doesn't say whether a completed review was approved or withdrawn, so not `dead`); DOT Completed Project / Substantial / Final Completion → `enacted`. Nothing is `is_dead`.
+- **Summary** = `ai_summary` → `description` (DOT descriptions are just the project type, e.g. "CAPITAL RECONSTRUCTION"). **`last_activity_at`** = latest past date of `last_action_date`, latest milestone, `filed_date`; else the row's `created_at`.
+- **DOT URL:** DOT rows have no `source_url`, and `content_items.url` is required; they link to the dataset page (`data.cityofnewyork.us/d/jvk9-k4re`). There's no in-app proposal page on this branch.
+- **No council-district places or topic tags** (the plan's mapping has neither). `cc_district`, community districts, ULURP actions and DOT streets go in `metadata`.
+- **Migration numbering:** live DB has 014–019 (neighborhood-map) and 020–026; next free is `027`. The function is plpgsql because the `local_proposals` tables exist only in the live DB, not in this branch's migrations.
+
+**Live data (read-only, 2026-11-22):** 1,575 proposals. ZAP ULURP 1,391 (136 precise, all point geometry, each in 1 NTA; 1,255 at the district-centroid fallback); DOT 184 lines, 23 crossing 2–3 NTAs, **all `geometry_precise = false`**, and all completed projects from 2015–2025. Neighborhoods reached: 65 NTAs with precise-only (57 counting only open reviews, 101 items), 148 if DOT counts as precise, 155 if everything is tagged. Only 25 rows have an `ai_summary`.
+
+**Left open (need product-owner decisions):**
+- **Q8 (recs plan):** Land Use items vs `local_proposals`. A rough title match finds 167 proposals (32 precise) with a matching Council LU item, out of 919 LU items. `ulurp_proposal_details.ulurp_numbers` holds only "ULURP"/"Non-ULURP", not application numbers, so linking needs name matching or a new ZAP field. Today LU items carry council districts only, so they don't appear in neighborhood widgets and there are no duplicates *there* yet; they would duplicate in topic/interest widgets.
+- **Q5 remainder:** exclude imprecise proposals from neighborhoods (built), or tag them some other way (e.g. to every NTA in their community district).
+- **DOT precision:** migration 019 says "DOT rows always have real source geometry", but the flag was left at its default (false). Either set `geometry_precise = true` for DOT rows in `local_proposals` or treat DOT as precise in the adapter; otherwise no DOT item reaches a neighborhood. Also whether 2015–2025 completed DOT projects belong in the feed at all.
+- **Q3:** who refreshes `local_proposals` (no sync on this branch; data ends mid-2026).
+- **District → NTA crosswalk** for Land Use items (Phase 3 note): depends on Q8.
+- After approval: apply 027, enable the source, run `backfill:neighborhood`, then `backfill:embeddings` (or wait for the cron) and `rank:widgets`. Neighborhood then shows as live in `getCoverage()`.
+

@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "vitest run",
     "backfill:content": "tsx --env-file=.env.local scripts/backfill-content-items.ts",
+    "backfill:neighborhood": "tsx --env-file=.env.local scripts/backfill-neighborhood.ts",
     "backfill:embeddings": "tsx --env-file=.env.local scripts/backfill-embeddings.ts",
     "rank:widgets": "tsx --env-file=.env.local scripts/rank-widgets.ts",
     "seed:neighborhoods": "tsx --env-file=.env.local scripts/seed-neighborhoods.ts"
