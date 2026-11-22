@@ -577,7 +577,7 @@ Built to the **v1.1** Phase 2 scope, before v1.2 landed. The v1.2 additions to P
 - **Parse quirks:** a place name inside a longer proper noun gets stripped ("noise near Gowanus canal" → topic "noise canal"; "Staten Island ferry" → topic "ferry", filtered to Staten Island). Common-word NTA aliases ("Corona", "Madison", "Utopia") can misfire. Review in the Phase 5 phrase review list.
 - **At 300k items** the exact path for city-wide places would scan most items; revisit with the Phase 3 precompute (cached widgets make it a background cost).
 - `/api/interests/resolve` still not HTTP-tested (no local `KV_REST_API_*`); smoke-test on the Preview deploy. The test phrases from this build are left in `interest_phrases` as cache rows.
-- `NYC_GEOCLIENT_KEY` is now in `.env.local` (for build plan B1); not yet in Vercel.
+- `NYC_GEOCLIENT_KEY` is now in `.env.local` and in Vercel (for build plan B1).
 
 ---
 
