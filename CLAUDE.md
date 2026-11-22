@@ -218,7 +218,9 @@ legislative-tracker/
 │   │   ├── embeddings/           # Voyage embeddings (recommendations-planv1.2.md §5)
 │   │   │   ├── voyage.ts         # Client, active model constant
 │   │   │   ├── embed-content.ts  # Item + topic embed jobs (cron, backfill)
-│   │   │   └── interests.ts      # Free-text phrase cache + matching
+│   │   │   ├── normalize.ts      # Phrase normalization (cache key)
+│   │   │   ├── places.ts         # Place gazetteer + async Haiku parse (§5.3)
+│   │   │   └── interests.ts      # Free-text phrase cache + place-aware matching
 │   │   ├── ai/
 │   │   │   └── summarize.ts      # Claude API integration
 │   │   ├── moderation/

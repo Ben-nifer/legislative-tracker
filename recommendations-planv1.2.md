@@ -1,6 +1,6 @@
 # Recommendations Plan — Content Layer, Embeddings & Feed Ranking
 
-**Status:** Draft v1.2 · 2026-11-22 · **Phase 1 done; Phase 2 partly done** (embeddings + phrase cache; v1.2 additions pending, see §14 Done log) · **v1.2: every widget is shared, not personalized; no "Top for you"; topic and politician widgets** (D22–D32) · Built from product-owner interview answers and a review of the onboarding mockup (Claude design canvas "Civic App Onboarding": iPhone clickable flow + web split view).
+**Status:** Draft v1.2 · 2026-11-22 · **Phases 1–2 done** (see §14 Done log) · **v1.2: every widget is shared, not personalized; no "Top for you"; topic and politician widgets** (D22–D32) · Built from product-owner interview answers and a review of the onboarding mockup (Claude design canvas "Civic App Onboarding": iPhone clickable flow + web split view).
 **Builds on:** `onboarding-spec.md` v1.1 (§6 live preview, §7 content & ranking).
 **Scope:** The data layer, embeddings pipeline and ranking engine behind the onboarding live preview and the home-feed widgets.
 
@@ -464,7 +464,7 @@ It derives the user's widget list from their follows (or the guest session), rea
 |---|---|---|
 | **0. Setup** | ✅ Folded into Phase 1 | — |
 | **1. Content layer** | ✅ Done (§14) | — |
-| **2. Embeddings** | ✅ Embed cron; ✅ backfill; ✅ `interest_phrases` cache; **migration `023` (§3.6)**; `places` gazetteer seed; place detection + async Haiku fallback (§5.3); `/api/interests/resolve` (✅ v1.1 version; needs place detection + widget output) | 1 |
+| **2. Embeddings** | ✅ Done (§14) | 1 |
 | **3. Shared ranking** | Importance (§6.2, incl. new-account cap) + recency (§6.3); widget formulas (§6.4); sponsor cap; 15-minute precompute into `widget_cache`; S3 politician ranking (§6.7); `ranking_config` v2; widget snapshot tests | 2 |
 | **4. Feed & widgets** | `getFeed`, `/api/feed` (with new-item diff), default layout (§7.2), guest session, zero-selection view, onboarding preview wiring, related-topic suggestions, impression/click logging | 3 + onboarding UI |
 | **5. Tuning** | Ranking inspector, weights editor, signal performance panel, calibration view, phrase review list, source health, S3 party-mix audit | 4 |
@@ -549,9 +549,35 @@ Built to the **v1.1** Phase 2 scope, before v1.2 landed. The v1.2 additions to P
 **Measured:** cache hit ~180 ms; miss (one Voyage call) 330–890 ms, run from a laptop against live Supabase. On-topic items score ~0.55–0.65 and loose matches ~0.38–0.48, so the 0.30 item floor is probably low (Q4).
 
 **Left open:**
-- **v1.2 Phase 2 additions not built:** migration `023` (§3.6), `places` gazetteer seed, place detection + async Haiku fallback (§5.3 steps 2–3, 5). `/api/interests/resolve` still returns a matched-item list (v1.1 shape); under v1.2 it should create/rank an `interest:{phrase}` widget and embed `topic_text` (phrase minus place) rather than the whole phrase.
+- ~~**v1.2 Phase 2 additions not built**~~ **Done in part 2 below.**
 - `/api/interests/resolve` wasn't HTTP-tested locally (`.env.local` has no `KV_REST_API_*`, and the local dev server hung). Only the library path behind it was exercised, against live data. Smoke-test it on the Preview deploy.
 - Duplicate topics (Housing / Housing & Rent, Land Use / Land Use & Zoning, Finance & Budget / Budget & Finance, Seniors / Senior Services, Youth Services / Youth & Families, Civil Rights / Civil Rights & Equity) split suggestions, and under v1.2 would create near-duplicate topic widgets. Worth merging before onboarding ships.
+
+### Phase 2 — Embeddings, part 2 (v1.2 additions) ✅ (2026-11-22)
+
+**Shipped:** migration `023_shared_widgets.sql` (applied): `item_importance`, `places`, `widget_cache`, the `interest_phrases` topic/place columns, `ranking_config` **v2 (now active**; v1 kept), and service-role functions `interest_phrase_lookup`, `store_interest_phrase_parsed`, `claim_interest_parse`, `complete_interest_parse`, `expand_place`, `match_interest_items`. `024_place_filtered_match.sql` (applied) fixes the place path of `match_interest_items`. Places seed: 397 rows from `scripts/generate-places-seed.ts` (NYC Open Data NTA 2020 list + hand lists). `src/lib/embeddings/places.ts`: gazetteer match, "looks like a place" check, Haiku fallback. `/api/interests/resolve` returns the v1.2 shape: `widgetKey`, `topicText`, `place` (with `covered`), `comingSoon`, `parsePending`, place-filtered items, related topics. Haiku runs after the response via `after()`. 14 new tests (44 total).
+
+**Decisions made during the build:**
+- **No `neighborhoods` table yet** (build plan B1), so NTAs were seeded straight into `places` from Open Data (`9nt8-h7nd`). B1 adds geometry/adjacency in its own table; NTA codes are 2020 (`BK0602`), not the 2010 codes in the plan's examples.
+- **`area` place type + `members` column:** common names covering several NTAs ("Harlem", "Astoria", "Bed-Stuy", "UWS"; 26 in all) filter to all their member NTAs. Names shared across boroughs go to the better-known one ("Murray Hill", "Chelsea" → Manhattan) or are dropped (cemeteries, Jamaica Bay).
+- **Also seeded:** boroughs (`borough:BK`) and the 51 council districts, with `parent_place` so a borough expands to its districts + NTAs. Council districts map to boroughs by number (legislators' `borough` is empty); 8 and 34 straddle borough lines.
+- **Bare "New York" = NYC.** "New York State" / "NY state" / "Albany" → `state:NY`. Every state, DC and federal are `covered = false` ("Coming soon"). State postal codes aren't aliases (they collide with words once lowercased).
+- **Place filter = the place plus everything inside it** (via `parent_place` and `members`). Federal filters on `jurisdiction_level` since it has no place tags.
+- **Phrase that is only a place** ("Park Slope") keeps the whole phrase as its topic.
+- **Cache reuse:** a phrase whose topic is already cached ("park slope bike lanes" → "bike lanes") copies that vector, no Voyage call.
+- **Haiku fallback:** triggers on "in/near/around + word" or a capitalized non-first word that isn't a topic word. One call per phrase via `claim_interest_parse` (a claim older than 5 minutes can be retaken). The answer is kept in `parse_raw` for the phrase review list (§8); places Haiku names that aren't in the gazetteer are rejected (e.g. "Hoboken"). On error the phrase stops pending rather than retrying.
+- **Place-filtered search is exact, not HNSW** (024): collect the place's items via the `(place_type, place_id)` index, score them in a materialized CTE. ~200 ms for all of NYC (9k items); the 023 version timed out.
+- **Items are ordered by similarity only.** The §6.4 topic formula and writing `widget_cache` stay in Phase 3. `match_phrase_items` / `interest_phrase_hit` / `store_interest_phrase` from 022 are now unused; drop them later.
+- **Seed loading:** the 023 schema went through the Supabase migration tool; the places rows were upserted with `generate-places-seed.ts --apply` (identical to 023's seed block, which runs in full on a fresh DB).
+
+**Measured (laptop → live Supabase):** cached phrase ~500–850 ms incl. place filter; new phrase with a cached topic ~400–700 ms; first call in a cold process ~3 s (gazetteer load).
+
+**Left open:**
+- **Neighborhood and area phrases return no items** until content is tagged to NTAs (B3 neighborhood adapter). Borough results are mostly bills whose *sponsor* represents a district there (Phase 1 tagging), not bills about that borough.
+- **Parse quirks:** a place name inside a longer proper noun gets stripped ("noise near Gowanus canal" → topic "noise canal"; "Staten Island ferry" → topic "ferry", filtered to Staten Island). Common-word NTA aliases ("Corona", "Madison", "Utopia") can misfire. Review in the Phase 5 phrase review list.
+- **At 300k items** the exact path for city-wide places would scan most items; revisit with the Phase 3 precompute (cached widgets make it a background cost).
+- `/api/interests/resolve` still not HTTP-tested (no local `KV_REST_API_*`); smoke-test on the Preview deploy. The test phrases from this build are left in `interest_phrases` as cache rows.
+- `NYC_GEOCLIENT_KEY` is now in `.env.local` (for build plan B1); not yet in Vercel.
 
 ---
 
