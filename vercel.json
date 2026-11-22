@@ -1,28 +1,32 @@
 {
   "crons": [
     {
-      "path": "/api/cron/refresh-stats",
-      "schedule": "*/15 * * * *"
+      "path": "/api/cron/sync-legislation",
+      "schedule": "0 5 * * *"
     },
     {
-      "path": "/api/cron/sync-legislation",
-      "schedule": "0 */2 * * *"
+      "path": "/api/cron/summarize-legislation",
+      "schedule": "0 6 * * *"
     },
     {
       "path": "/api/cron/ingest-content",
-      "schedule": "15 */2 * * *"
+      "schedule": "0 7 * * *"
     },
     {
       "path": "/api/cron/embed-content",
-      "schedule": "30 */2 * * *"
+      "schedule": "0 8 * * *"
     },
     {
-      "path": "/api/cron/rank-widgets",
-      "schedule": "5-59/15 * * * *"
+      "path": "/api/cron/refresh-stats",
+      "schedule": "0 8 * * *"
     },
     {
       "path": "/api/cron/send-digests",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/rank-widgets",
+      "schedule": "0 10 * * *"
     },
     {
       "path": "/api/cron/sync-council",
@@ -31,10 +35,6 @@
     {
       "path": "/api/cron/keepalive",
       "schedule": "0 3 * * *"
-    },
-    {
-      "path": "/api/cron/summarize-legislation",
-      "schedule": "0 1/2 * * *"
     }
   ]
 }

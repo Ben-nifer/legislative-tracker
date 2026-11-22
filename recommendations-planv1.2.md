@@ -506,6 +506,9 @@ It derives the user's widget list from their follows (or the guest session), rea
 
 ## 13. Housekeeping
 
+**Cron cadence (2026-11-22):** Vercel rejected every preview build because the project is on the Hobby plan, which allows daily crons only. All jobs now run **daily** (CLAUDE.md lists the times), so D9's 2-hour freshness and the 15-minute precompute (§6.1) are on hold until the project moves to Pro; the planned schedules are recorded in CLAUDE.md to restore then. **[DECIDED]**
+
+
 ~~`CLAUDE.md` is out of date~~ **Done in Phase 1** (Next.js 16, Haiku 4.5, pointer to this plan).
 
 ## 14. Done log

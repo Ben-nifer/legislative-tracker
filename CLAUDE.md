@@ -150,7 +150,7 @@ legislative-tracker/
 │   │   ├── api/                  # API routes
 │   │   │   ├── cron/             # Vercel cron jobs
 │   │   │   │   ├── sync-legislation/
-│   │   │   │   ├── rank-widgets/     # Widget precompute, every 15 min
+│   │   │   │   ├── rank-widgets/     # Widget precompute (daily on Hobby; see vercel.json)
 │   │   │   │   └── refresh-stats/
 │   │   │   └── ...
 │   │   ├── actions/              # Server Actions
@@ -225,7 +225,7 @@ legislative-tracker/
 │   │   ├── ranking/              # Shared widget ranking (recommendations-planv1.2.md §6)
 │   │   │   ├── score.ts          # Importance, recency, widget formulas, sponsor cap (pure)
 │   │   │   ├── politicians.ts    # Onboarding S3 activity ranking
-│   │   │   ├── precompute.ts     # 15-minute job → item_importance + widget_cache
+│   │   │   ├── precompute.ts     # Precompute job → item_importance + widget_cache
 │   │   │   └── config.ts         # Active ranking_config
 │   │   ├── onboarding/           # Onboarding plumbing (onboarding-build-planv1.1.md §3–4)
 │   │   │   ├── guest.ts          # onb_ctx guest cookie schema
@@ -381,6 +381,12 @@ legislative-tracker/
 - `comment_count`, `bookmark_count`
 - `trending_score`
 - `engagement_24h`, `engagement_7d`
+
+---
+
+## Cron schedule (Vercel Hobby)
+
+The project is on Vercel's **Hobby plan, which only allows daily crons**, so every job in `vercel.json` runs once a day (UTC, each an hour after what it depends on): sync-legislation 05:00 → summarize 06:00 → ingest-content 07:00 → embed-content + refresh-stats 08:00 → send-digests 09:00 → rank-widgets 10:00. **When the project moves to Pro, restore the planned cadences:** refresh-stats `*/15`, sync-legislation `0 */2`, ingest-content `15 */2`, embed-content `30 */2`, rank-widgets `5-59/15`, summarize-legislation `0 1/2` (recommendations plan D9, §6.1).
 
 ---
 
