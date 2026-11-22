@@ -41,3 +41,10 @@ export const feedbackRateLimit = new Ratelimit({
   limiter: Ratelimit.slidingWindow(5, '1 h'),
   prefix: 'rl:feedback',
 })
+
+// Free-text interests (/api/interests/resolve). Guests can call it, so keyed by IP.
+export const interestRateLimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(60, '1 h'),
+  prefix: 'rl:interest',
+})

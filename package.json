@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "backfill:content": "tsx --env-file=.env.local scripts/backfill-content-items.ts"
+    "backfill:content": "tsx --env-file=.env.local scripts/backfill-content-items.ts",
+    "backfill:embeddings": "tsx --env-file=.env.local scripts/backfill-embeddings.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",

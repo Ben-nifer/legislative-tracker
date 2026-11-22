@@ -1,6 +1,6 @@
 # Recommendations Plan — Content Layer, Embeddings & Feed Ranking
 
-**Status:** Draft v1.1 · 2026-11-22 · **Phase 1 done** (see §14 Done log) · Built from product-owner interview answers and a review of the onboarding mockup (Claude design canvas "Civic App Onboarding": iPhone clickable flow + web split view).
+**Status:** Draft v1.1 · 2026-11-22 · **Phases 1–2 done** (see §14 Done log) · Built from product-owner interview answers and a review of the onboarding mockup (Claude design canvas "Civic App Onboarding": iPhone clickable flow + web split view).
 **Builds on:** `onboarding-spec.md` v1.1 (§6 live preview, §7 content & ranking).
 **Scope:** The data layer, embeddings pipeline and ranking engine behind the onboarding live preview and the home-feed widgets.
 
@@ -464,7 +464,7 @@ It runs one candidate-and-score pass and slices the results into each requested 
 | ~~Q1~~ | ~~Review the onboarding mockup~~ **Resolved 2026-11-22:** reviewed; changes captured in D18, D19, D21, §6.4 and §7.2–7.3 | — |
 | ~~Q2~~ | ~~Starting weights~~ **Resolved:** approved (D15), tunable via the weights editor (D16) | — |
 | ~~Q3~~ | ~~S3 politician ranking~~ **Resolved:** in this plan (D20, §6.5) | — |
-| Q4 | Similarity floor/ceiling values | Need real embeddings to calibrate (Phase 5) |
+| Q4 | Similarity floor/ceiling values | Need real embeddings to calibrate (Phase 5). Phase 2 first look: on-topic items score ~0.55–0.65 and loose matches ~0.38–0.48, so the 0.30 floor is probably low |
 | ~~Q5~~ | ~~Log impressions?~~ **Resolved:** yes (D17, §3.5) | — |
 | Q6 | Update the mockup: add the "Top for you" strip to the final page, and switch related topics to tap-to-add | Keeps the design and the plan in sync |
 | Q7 | The mockup's in-feed card suggests "Follow Brooklyn **Borough** projects?", but spec §3 says boroughs aren't followable | Resolve when suggestion cards are planned (phase 2) |
@@ -494,3 +494,22 @@ One short section per finished phase: what shipped, decisions made during the bu
 - **Hearings:** `syncEvents()` is now called from the sync-legislation cron, so `next_event_at` and `hearing_scheduled` start filling in after deploy.
 
 **Left open:** Q8 above. `syncEvents()` shares the sync cron's 300s budget; move it to its own cron if timeouts appear. The HNSW index assumes `voyage-3.5`; recreate it if Phase 2 picks a different model.
+
+### Phase 2 — Embeddings ✅ (2026-11-21)
+
+**Shipped:** migration `022_embeddings.sql` (applied): `content_items_to_embed`, `interest_phrase_hit`, `store_interest_phrase`, `match_phrase_items`, `match_phrase_topics`, all service-role only, plus a `content_hash` column on `topic_embeddings`. `src/lib/embeddings/` (Voyage client with retry/backoff, embed jobs, phrase normalization and resolve). `/api/cron/embed-content` at `30 */2 * * *` (240s budget per run). `POST /api/interests/resolve`, rate-limited to 60/hour per IP. `npm run backfill:embeddings` (ran: 9,169 items + 27 topics, ~800K tokens, 102s; re-run writes 0). Vitest tests for normalization, embedding text, the Voyage client and topic picking.
+
+**Decisions made during the build:**
+- **Model:** stayed on `voyage-3.5` (1024-d), so the 020 HNSW index stands. `voyage-4` also works with this key at 1024-d. Switching means changing `EMBEDDING_MODEL`, recreating the partial index and re-running the backfill. No schema change.
+- **Topic text:** `topics` has no description column, so the one-line descriptions live in `TOPIC_DESCRIPTIONS` in `embed-content.ts`. Topics not in the map embed from their name alone. The hash covers name + description, so editing either re-embeds on the next cron.
+- **Phrase matching runs in SQL by cache key.** The phrase vector never leaves the DB. Topic suggestions use SQL too (plan said "in memory"); at 27 rows that comes to the same thing.
+- **Topic suggestion rule (D18):** a topic needs similarity ≥ 0.40 **and** must be within 0.06 of the best topic, max 3. A floor alone surfaced generic topics ("Small Business" scores ~0.44 against "bike lanes"). Sample results: bike lanes → Transportation; rent control → Housing & Rent; dog parks → Parks & Recreation; high-speed rail → Transportation; rats / e-bike batteries → none.
+- **Item floor** comes from the active `ranking_config.params.similarity_floor` (0.30).
+- **Phase 2 pre-filters by `jurisdiction_level` only** (optional `levels`), plus `not is_dead`. Place-level filtering arrives with `feed_candidates` in Phase 3. Today all content is NYC anyway.
+- **`excludeTopicIds`** on the resolve endpoint, so chips the user already picked aren't suggested back.
+- Phrase cache: a row stored under a different model counts as a miss and is overwritten.
+- **Normalization:** punctuation becomes a space ("high-speed rail" → "high speed rail").
+
+**Measured:** cache hit ~180 ms; miss (one Voyage call) 330–890 ms, run from a laptop against live Supabase.
+
+**Left open:** `/api/interests/resolve` wasn't HTTP-tested locally (`.env.local` has no `KV_REST_API_*`, and the local dev server hung). Only the library path behind it was exercised, against live data. Smoke-test it on the Preview deploy. Duplicate topics (Housing / Housing & Rent, Land Use / Land Use & Zoning, Finance & Budget / Budget & Finance, Seniors / Senior Services, Youth Services / Youth & Families, Civil Rights / Civil Rights & Equity) can split suggestions and chips; worth merging before onboarding ships. Q8 still open.

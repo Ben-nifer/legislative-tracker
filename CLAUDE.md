@@ -215,6 +215,10 @@ legislative-tracker/
 │   │   │   ├── index.ts          # Registered adapters
 │   │   │   └── adapters/
 │   │   │       └── nyc-legistar.ts
+│   │   ├── embeddings/           # Voyage embeddings (recommendations-plan.md §5)
+│   │   │   ├── voyage.ts         # Client, active model constant
+│   │   │   ├── embed-content.ts  # Item + topic embed jobs (cron, backfill)
+│   │   │   └── interests.ts      # Free-text phrase cache + matching
 │   │   ├── ai/
 │   │   │   └── summarize.ts      # Claude API integration
 │   │   ├── moderation/

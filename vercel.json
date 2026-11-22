@@ -13,6 +13,10 @@
       "schedule": "15 */2 * * *"
     },
     {
+      "path": "/api/cron/embed-content",
+      "schedule": "30 */2 * * *"
+    },
+    {
       "path": "/api/cron/send-digests",
       "schedule": "0 9 * * *"
     },
