@@ -1,0 +1,293 @@
+# Onboarding Build Plan — Screens, Home Widgets & Shared Plumbing
+
+**Status:** Draft v1.1 · 2026-11-22 · Built from product-owner interview answers. **v1.1:** aligned with `recommendations-plan.md` v1.2 (shared widgets, no "Top for you", topic and politician widgets).
+**Builds on:** `onboarding-spec.md` v1.1 (what the screens do), the "Civic App Onboarding" design canvas (how they look), and `recommendations-plan.md` v1.1 (the engine behind the feed).
+**Scope:** Building onboarding S0–S6, the widget home page, and the plumbing both depend on, in this Next.js web app.
+
+> **[DECIDED]** = product-owner answer from the interview. **[PROPOSED]** = my recommendation, awaiting approval. **[OPEN]** = unresolved (see §12).
+
+---
+
+## 1. Decisions from the interview
+
+| # | Topic | Decision |
+|---|---|---|
+| B1 | Scope | **Onboarding S0–S6 + the widget home page + shared plumbing** (address → districts, guest state, sign-in, rep data, analytics). Widget customization stays a separate, later plan. **[DECIDED]** |
+| B2 | Platform | **Responsive web only.** iOS and S5 (notifications) come later. **[DECIDED]** |
+| B3 | Federal / State levels | Shown as **"Coming soon"**: S2 cards visible but disabled, state/federal reps in S3 likewise. Each level **switches on automatically** once its adapter has content. **[DECIDED]** |
+| B4 | Addresses outside NYC | **Friendly NYC-only note** with the StreetEasy link from spec §S1, then continue with the Popular NYC feed. Federal/state districts are not resolved or stored. **[DECIDED]** |
+| B5 | Visual style | **The mockup's look** (teal accent, Inter + Space Grotesk, light warm background) for **onboarding and the home page**. Other pages keep the NYC theme for now. **[DECIDED]** |
+| B6 | Geocoding | **NYC Geoclient API** replaces today's GeoSearch → PLUTO lookup. **[DECIDED]** |
+| B7 | Sign-in | **Google + email magic link** (as today). Apple waits for the iOS app. **[DECIDED]** |
+| B8 | Who sees onboarding | **New visitors** (signed out, new browser session) are routed to S0. Returning guests in a new session **see S0 again**; nothing about them is remembered. Signed-in users never see it. Existing accounts get a one-time "Build your feed" banner. **[DECIDED]** |
+| B9 | Username | **Auto-generated** at sign-up from the Google/email name; editable in Profile. The username step is removed. **[DECIDED]** |
+| B10 | S3 representatives | **Council Member + Mayor.** The Mayor is one manual record. State/federal reps show as "Coming soon." **[DECIDED]** |
+| B11 | Analytics | Spec §11 events go to a **Supabase `analytics_events` table**. No new vendor. **[DECIDED]** |
+| B12 | Neighborhood content | A **small adapter feeds the kept DOT/ULURP `local_proposals` data into `content_items`**, tagged to NTA neighborhoods. **[DECIDED]** |
+| B13 | Rollout | **Behind a feature flag**, off by default. Tested on Vercel previews, then switched on. The old home page stays as the fallback. **[DECIDED]** |
+
+---
+
+## 2. How this fits with the other documents
+
+```
+onboarding-spec.md        WHAT each screen does
+design canvas (mockup)    HOW it looks
+this plan                 HOW we build the screens + plumbing
+recommendations-plan.md   The engine: content_items, embeddings, ranking, /api/feed
+```
+
+**Integration seam:** every screen reads data through interfaces in `src/lib/onboarding/data/` (§4.6). They start as **fixtures** and are swapped for real implementations as the recommendations-plan phases land. No screen code changes when the swap happens.
+
+---
+
+## 3. Architecture
+
+### 3.1 Routes
+
+| Route | What | Notes |
+|---|---|---|
+| `/welcome` | Onboarding S0–S4 | New, under `src/app/(public)/welcome/`. One client route; the step lives in the URL (`?step=2`) so Back works |
+| `/` | Home: S6 / widget page | Flag on: new widget home page. Flag off: today's page |
+| `/onboarding` (existing) | Username form | **Retired** (B9). Redirects to `/` |
+
+**Redirect rule** (in `middleware.ts`, flag on): a request to `/` with **no signed-in user** and **no `onb_session` cookie** → redirect to `/welcome`. `onb_session` is a **session cookie** (no expiry), set on the first visit to `/welcome`, so it disappears when the browser closes (B8). Crawlers (detected by user agent) are not redirected, so the public home page stays indexable.
+
+### 3.2 Feature flags
+
+| Flag (env var) | Default | Controls |
+|---|---|---|
+| `NEXT_PUBLIC_FLAG_NEW_ONBOARDING` | `false` | `/welcome`, the redirect, the new home page |
+| `NEXT_PUBLIC_FLAG_STEP_POLITICIANS` | `true` | Kill switch for S3 (spec §S3) |
+| `NEXT_PUBLIC_FLAG_STEP_INTERESTS` | `true` | Kill switch for S4 (spec §S4) |
+
+Env vars are enough for an on/off launch switch. **[PROPOSED]**
+
+### 3.3 Guest state
+
+Spec §2 requires guest selections to last only for the session. **[PROPOSED]** Store them in a **session cookie** `onb_ctx` rather than `sessionStorage`:
+
+| Option | Shared across tabs? | Server can read it? | Gone when browser closes? |
+|---|---|---|---|
+| `sessionStorage` | ❌ No. Opening a bill in a new tab loses the feed | ❌ | ✅ |
+| **Session cookie (proposed)** | ✅ | ✅ The home page can render a guest's feed on the server | ✅ |
+
+- **Contents:** only IDs: districts, neighborhood, jurisdictions, legislator IDs, topic IDs, interest phrases (max 10). Shaped like `UserContext` (recommendations plan §6.1), versioned (`v: 1`), and kept under 3 KB.
+- **Never** contains the address or coordinates (spec §S1).
+- Written by the client on each change; validated with zod whenever the server reads it.
+
+---
+
+## 4. Shared plumbing
+
+### 4.1 Address → districts (S1)
+
+**Service:** NYC Geoclient API (free; needs a key from the NYC API Developers Portal). **[DECIDED: B6]**
+
+| Step | Detail |
+|---|---|
+| Autocomplete | Keep **NYC GeoSearch** (`geosearch.planninglabs.nyc`, free, no key) for type-ahead suggestions. It's fast and NYC-biased. *Geoclient doesn't autocomplete* **[PROPOSED]** |
+| Resolve | On selection, a server action `resolveAddress(text)` calls Geoclient's address/search endpoint. It reads the **council district, state senate district, assembly district, congressional district, NTA code + name** and borough. *Confirm exact field names against the Geoclient docs at build time* |
+| Persist | Returns district + NTA IDs only. Signed-in users → `user_places` (recommendations plan §3.3). Guests → `onb_ctx` cookie |
+| Privacy | The address is held only in memory for the request: **not logged, not stored, scrubbed from error reports and analytics** (spec §S1, §14) |
+| Rate limit | Reuse the existing Upstash `geocodeRateLimit`, keyed by session ID for guests |
+| Outside NYC (B4) | Geoclient finds nothing → GeoSearch's result shows a non-NYC US address → show the NYC-only note + StreetEasy link (no user data in the URL) and continue with the Popular NYC feed |
+| Other errors | Non-US, unresolvable, service down → the spec §S1 states, with Skip always available |
+| Replaces | `lookupAddressDistrict` in `src/app/actions/profile.ts`. The profile's Council Member Finder moves to the new action |
+
+New env var: `NYC_GEOCLIENT_KEY` (server only).
+
+### 4.2 Neighborhoods (NTA 2020)
+
+A new **`neighborhoods`** table is needed for S2's "Add another neighborhood" search, for Geoclient's NTA codes, and for tagging neighborhood content.
+
+| Column | Notes |
+|---|---|
+| `nta_code` (PK), `name`, `borough` | From NYC Open Data "2020 Neighborhood Tabulation Areas" |
+| `aliases` text[] | Colloquial names, e.g. "DUMBO", "Park Slope" (spec §3). Seeded by hand for the best-known ones |
+| `geometry` | Polygon, for tagging content (§4.8) and the "Nearby" fallback (spec §7.1) |
+| `adjacent_ntas` text[] | Precomputed neighbors in the same borough, for the "Nearby: [name]" fallback |
+
+**[PROPOSED]** Enable **PostGIS** in Supabase for polygon matching (`ST_Intersects`) instead of hand-written point-in-polygon code.
+
+### 4.3 Sign-in & carrying guest choices into the account
+
+- **Methods:** Google OAuth + email magic link (B7). The sheet copy follows spec §8: "Save your feed" / "Sign in to take a stance on this bill," with an honest "Your choices won't be saved if you leave."
+- **Gated actions:** stance, comment, bookmark and "save follow" open the sign-in sheet. The pending action is stored in a short-lived cookie `onb_pending` (action + item ID) and completed after sign-in (spec §8).
+- **On first sign-in** (`src/app/auth/callback/route.ts`):
+  1. Create the `user_profiles` row with an **auto-generated username** (B9): slugified name or email local part, plus digits if it's taken.
+  2. Copy `onb_ctx` into `user_places`, `user_jurisdiction_follows`, `legislator_follows`, `topic_follows` and `user_interests`.
+  3. Link the guest's `feed_impressions` / `analytics_events` rows (by session ID) to the new user.
+  4. Complete `onb_pending`, then clear both cookies.
+  5. Redirect back to where the user was, **not** to `/onboarding` as today.
+- **Existing accounts** (B8): a dismissible "Build your feed" banner on the home page opens `/welcome` at S1, with any existing follows pre-loaded. Today's `council_member_id` on the profile maps to their council district.
+
+### 4.4 Representatives data (S3)
+
+| Rep | Source | Status |
+|---|---|---|
+| Council Member | `legislators` (Legistar sync) | ✅ Exists |
+| Mayor | **One manual record** in `legislators` (B10), with `legislature_id` = NYC and a flag so the council sync doesn't deactivate it | Add in Phase B1 |
+| State Senator, Assembly Member, U.S. Rep, Senators | — | "Coming soon" card (B3) |
+
+Spec §S3's "Active in your jurisdictions" list comes from the recommendations engine (`GET /api/politicians/active`, recommendations plan §6.5).
+
+### 4.5 Coverage registry: what counts as "Coming soon"
+
+A small server function `getCoverage()` returns, per level (`federal`, `state`, `city`, `neighborhood`), whether it's **live**. A level is live when an enabled source in `sources` has at least one `content_items` row at that level. The S2 cards, S3 rep cards and banners all read it, so **a level lights up by itself** the day its adapter ships (B3).
+
+### 4.6 Data interfaces (fixtures first)
+
+All in `src/lib/onboarding/data/`, each with a fixture and a real implementation:
+
+| Interface | Fixture until | Real implementation |
+|---|---|---|
+| `resolveAddress(text)` | Phase B1 | §4.1 |
+| `searchNeighborhoods(query)` | Phase B1 | `neighborhoods` table |
+| `getCoverage()` | Phase B1 | §4.5 |
+| `getRepresentatives(places)` | Phase B1 | §4.4 |
+| `getActivePoliticians(jurisdictions)` | Recs Phase 3 | `/api/politicians/active` |
+| `resolveInterest(phrase)` | Recs Phase 2 | `/api/interests/resolve` |
+| `getFeed(context, widgets, previousItemIds)` | Recs Phase 4 | `/api/feed` |
+
+The fixtures reproduce the mockup's placeholder data (Park Slope / CD 39, the 12 sample items), so the screens can be built and demoed before the engine exists.
+
+### 4.7 Analytics (B11)
+
+**`analytics_events`**: `id`, `session_id`, `user_id` null, `name` (e.g. `onb_view`), `props` jsonb, `created_at`.
+- Events and properties exactly as in spec §11. An allowlist in `track()` rejects any unknown property, so **no address or other PII can slip into `props`**.
+- Inserts are batched from the client every few seconds and on page hide, through a rate-limited `POST /api/events`.
+- Funnels are read with SQL or Metabase.
+
+### 4.8 Neighborhood adapter: DOT/ULURP → `content_items` (B12)
+
+This is a new adapter under the recommendations plan's adapter contract (§4.1 there). It reads the kept `local_proposals` table; it does **not** revive the abandoned branch's code.
+
+| Field | Mapping |
+|---|---|
+| `external_id` | `local_proposals.source || ':' || source_id` |
+| `item_type` | ULURP → `project` (land use); DOT → `project` (street/construction). `metadata.subtype` keeps the detail |
+| `title`, `summary` | `title`; `ai_summary` → `description` |
+| `jurisdiction_level` | `neighborhood` |
+| `places` | **Precise geometry** (`geometry_precise = true`) → every NTA the geometry intersects (corridors get several, per spec §7.1) · **Imprecise** (district-centroid fallback) → **not tagged to a neighborhood**, so it can't appear in the wrong neighborhood's banner **[PROPOSED]** |
+| `last_activity_at`, `stage` | `last_action_date`; `status` mapped to the recommendations plan's stages |
+
+Cadence: a weekly cron (this data changes slowly). Keeping these tables fresh with new DOT/ULURP data is **out of scope** until a neighborhood source is rebuilt; this adapter only serves what's already there. See Q3.
+
+---
+
+## 5. Screens
+
+Shared building blocks live in `src/components/onboarding/`: `StepShell` (progress, Skip, Back, "Explore my feed"), `LivePreview` (split view or peek card), `FeedBanner`, `FeedItemCard` (type · status, title, provenance tag, "New ·" marker), `ComingSoonCard`, `SignInSheet`.
+
+| Screen | Build notes (behavior per spec; look per mockup) |
+|---|---|
+| **S0 Welcome** | "Build my feed" → S1; "Just show me what's popular" → S6 Popular. Footer "Already have an account? Sign in" |
+| **S1 Address** | GeoSearch autocomplete → `resolveAddress`. Confirmation chip "Council District 39 · Park Slope". All §S1 states. **No** "Use my location" on web in v1 **[PROPOSED]** |
+| **S2 Jurisdictions** | Each selection **adds a jurisdiction or neighborhood widget** to the preview. Cards from `getCoverage()`: NYC + Neighborhood live; Federal + State as `ComingSoonCard` (B3). "Yours" badges after an address resolves. "Select all of mine" selects live levels only. Neighborhood search via `searchNeighborhoods` |
+| **S3 Politicians** | Following someone **adds their politician widget** to the preview. "Your representatives": Council Member + Mayor, then "Coming soon" cards for the others (B10). "Active in your jurisdictions": up to 8 cards with reason lines. "Find someone else" search. Party shown as a text label |
+| **S4 Interests** | Each chip or typed interest **adds its own topic widget** to the preview. 12–16 chips (existing flat topics) + "Add your own…" → `resolveInterest`. A typed place is shown back ("housing legislation · California"); uncovered places show the widget as "Coming soon." Related topics as tap-to-add "+ Transit" (recommendations plan D18). Removable tray |
+| **S6 Here's your page** | The home page (§6), with "Here's your page. You can customize it anytime." and a coach mark. The sign-in sheet appears once per session (spec §8) |
+| **S5** | Not built (B2) |
+
+**Live preview** (spec §6): two columns at ≥1024 px (survey 40%, feed 60%); a peek card with the top 2 items + count below that, expanding to a sheet with "Keep building." Shows the user's widgets in layout order (recommendations plan §7.2), 3 items each. Calls `getFeed` with `previousItemIds` to get "New ·" flags and the live-region text ("Added 3 items from New York City · 6 items"). Requests are debounced at 150 ms; the latest request wins.
+
+---
+
+## 6. Home page (widget layout)
+
+Flag on: `src/app/page.tsx` renders the widget page for **everyone**: signed-in users from their saved context, guests from `onb_ctx`, and empty context as the Popular feed (spec §7.3).
+
+| Order | Widget | Notes |
+|---|---|---|
+| 1 | Jurisdiction widgets: State → City (Federal when live) | Shared rankings; 5 items + "See all" |
+| 2 | Neighborhood widgets | Shared; "Nearby" top-up when thin |
+| 3 | Topic widgets (chips and typed interests) | Shared; header "Because you follow Housing" |
+| 4 | Politician widgets | Shared |
+| 5 | Tracked | Signed-in only |
+| 6 | Trending | Everyone |
+| 7 | Friend activity | Signed-in users who follow someone |
+
+There is **no "Top for you"** (recommendations plan D23). Order per recommendations plan §7.2.
+
+- One `getFeed` call per page load (recommendations plan §7.1).
+- Today's "For You" and "Trending" sections are retired when the flag is on; the code stays until the flag is removed.
+- A "Customize" button links to `/welcome` at S2 for now. The real widget editor is the later plan.
+- Guests see a "Save your feed" banner; signed-out visitors with an empty context see "Popular right now · Personalize."
+
+---
+
+## 7. Visual system (B5)
+
+- **Scoped theme:** the mockup's tokens defined as CSS variables under a `.theme-civic` class applied to `/welcome` and the home page only:
+  `--civic-bg #F6F5F1 · --civic-surface #FFFFFF · --civic-ink #15171C · --civic-muted #4A4F5A · --civic-border #DAD8D1 · --civic-accent #0B6B5D · --civic-accent-soft #E3F0EC · --civic-badge-bg #FBEBDD · --civic-badge-ink #9A4A0C`
+- **Fonts:** Inter (body) and Space Grotesk (headings) via `next/font`, loaded only on these routes.
+- **Header/nav:** the global header keeps the NYC theme for now. The visible jump between the home page and other pages is accepted (B5) until the app-wide restyle. **[OPEN] Q1**
+- The mockup still needs: a web S6, topic and politician widgets on S6, and widgets (not re-ranked banners) appearing as S3/S4 selections are made (recommendations plan Q6). Remove the "Top for you" peek idea.
+
+---
+
+## 8. Accessibility & performance
+
+- WCAG 2.2 AA per spec §10: real buttons and toggles (`aria-pressed`), focus moves to each step's heading, 44 px targets, contrast checked on the teal palette, party as text.
+- A polite live region for preview changes; animations off under `prefers-reduced-motion`, keeping a brief highlight.
+- Budgets from spec §6: toggle ≤ 300 ms, free text ≤ 800 ms, address ≤ 1.5 s (p95). Fixtures add an artificial delay so loading states get built and tested.
+
+---
+
+## 9. Testing
+
+| Layer | Tests |
+|---|---|
+| Unit | Guest-cookie schema, username generator, coverage registry, analytics allowlist (rejects PII keys) |
+| Integration | `resolveAddress` against recorded Geoclient responses (NYC, outside NYC, unresolvable); sign-in carry-over of every guest field |
+| End-to-end (Playwright) | (1) skip everything → Popular feed; (2) full flow as a guest → sign in from a gated stance → stance saved and choices carried over; (3) outside-NYC address; (4) mobile peek card; (5) keyboard-only run |
+| Privacy check | E2E asserts the address string never appears in network payloads to `/api/events`, in cookies or in server logs |
+| Accessibility | axe checks on every step in E2E |
+
+---
+
+## 10. Phased delivery (alongside the recommendations plan)
+
+| Phase | Deliverable | Depends on | Runs in parallel with |
+|---|---|---|---|
+| **B0. Prep** | Update the mockup (recs Q6: topic/politician widgets, web S6, tap-to-add); get the Geoclient key; enable PostGIS | — | Recs Phase 1 cleanup |
+| **B1. Plumbing** | `resolveAddress` (Geoclient), `neighborhoods` table + seed, Mayor record, coverage registry, guest cookie, flags, `analytics_events`, sign-in carry-over + auto-username | Recs Phase 1 (`user_places` etc.) | Recs Phase 2 |
+| **B2. Screens on fixtures** | S0–S4, live preview, sign-in sheet, S6 + widget home page, all reading fixtures | B0 mockup update, B1 | Recs Phase 3 |
+| **B3. Neighborhood adapter** | DOT/ULURP → `content_items` with NTA tags | Recs Phase 1, B1 (`neighborhoods`) | Recs Phase 2–3 |
+| **B4. Integration** | Swap fixtures for the real `resolveInterest`, `getActivePoliticians`, `getFeed` | Recs Phases 2–4 | — |
+| **B5. Launch** | E2E + accessibility pass on a Vercel preview → flip `NEXT_PUBLIC_FLAG_NEW_ONBOARDING` → monitor funnels → remove old home code after 2 stable weeks | B4 | Recs Phase 5 |
+
+**Overall order across both plans:**
+```
+Recs P1 ─► Recs P2 ─► Recs P3 ─► Recs P4 ─► Recs P5
+  │           │          │          │
+  └► B0, B1 ──┴► B2, B3 ─┴──────────┴► B4 ─► B5 (launch)
+```
+
+---
+
+## 11. Changes to `onboarding-spec.md` this plan implies
+
+| Spec section | Change |
+|---|---|
+| §2 Platforms | Web first; iOS later (B2) |
+| §2 Sign-up methods | Google + email magic link; Apple with the iOS app (B7) |
+| §S1 Outside NYC | Federal/state districts not resolved yet; Popular NYC feed instead (B4) |
+| §S1 "Use my current location" | Not on web in v1 |
+| §S2 / §S3 | Federal and State shown as "Coming soon" until their data exists (B3, B10) |
+| §S5 | Deferred with iOS |
+| §11 Events | Stored in Supabase `analytics_events` (B11) |
+| New | Username auto-generated; the username step is removed (B9) |
+
+---
+
+## 12. Open questions
+
+| # | Question | Why it matters |
+|---|---|---|
+| Q1 | When does the rest of the app move to the mockup's look (header, legislation pages, profile)? | Until then there's a style jump between home and other pages |
+| Q2 | Confirm Geoclient's response fields and terms during B1 | The district fields and NTA code must be what §4.1 assumes |
+| Q3 | Who keeps DOT/ULURP data fresh after launch? The adapter only serves what's in `local_proposals` today | Neighborhood banners go stale over time without a refresh source |
+| Q4 | Schema drift: `user_profiles.council_member_id` and `community_board` exist in the database but not in any repo migration | New migrations should capture them so a fresh database matches production |
+| Q5 | Approve the **[PROPOSED]** items: session cookie for guest state (§3.3), GeoSearch for autocomplete (§4.1), PostGIS (§4.2), imprecise proposals excluded from neighborhoods (§4.8), env-var flags (§3.2), no geolocation on web (§5) | They shape B1 |
