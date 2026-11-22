@@ -1,6 +1,6 @@
 # Recommendations Plan — Content Layer, Embeddings & Feed Ranking
 
-**Status:** Draft v1.2 · 2026-11-22 · **Phases 1–2 done** (see §14 Done log) · **v1.2: every widget is shared, not personalized; no "Top for you"; topic and politician widgets** (D22–D32) · Built from product-owner interview answers and a review of the onboarding mockup (Claude design canvas "Civic App Onboarding": iPhone clickable flow + web split view).
+**Status:** Draft v1.2 · 2026-11-22 · **Phases 1–3 done** (see §14 Done log) · **v1.2: every widget is shared, not personalized; no "Top for you"; topic and politician widgets** (D22–D32) · Built from product-owner interview answers and a review of the onboarding mockup (Claude design canvas "Civic App Onboarding": iPhone clickable flow + web split view).
 **Builds on:** `onboarding-spec.md` v1.1 (§6 live preview, §7 content & ranking).
 **Scope:** The data layer, embeddings pipeline and ranking engine behind the onboarding live preview and the home-feed widgets.
 
@@ -465,7 +465,7 @@ It derives the user's widget list from their follows (or the guest session), rea
 | **0. Setup** | ✅ Folded into Phase 1 | — |
 | **1. Content layer** | ✅ Done (§14) | — |
 | **2. Embeddings** | ✅ Done (§14) | 1 |
-| **3. Shared ranking** | Importance (§6.2, incl. new-account cap) + recency (§6.3); widget formulas (§6.4); sponsor cap; 15-minute precompute into `widget_cache`; S3 politician ranking (§6.7); `ranking_config` v2; widget snapshot tests | 2 |
+| **3. Shared ranking** | ✅ Done (§14); neighborhood "Nearby" fallback waits on NTA adjacency (build plan B1) | 2 |
 | **4. Feed & widgets** | `getFeed`, `/api/feed` (with new-item diff), default layout (§7.2), guest session, zero-selection view, onboarding preview wiring, related-topic suggestions, impression/click logging | 3 + onboarding UI |
 | **5. Tuning** | Ranking inspector, weights editor, signal performance panel, calibration view, phrase review list, source health, S3 party-mix audit | 4 |
 | **6. More importance signals** (later) | News-mention source and NYC lobbying adapter feeding importance (§15) | 3 |
@@ -578,6 +578,32 @@ Built to the **v1.1** Phase 2 scope, before v1.2 landed. The v1.2 additions to P
 - **At 300k items** the exact path for city-wide places would scan most items; revisit with the Phase 3 precompute (cached widgets make it a background cost).
 - `/api/interests/resolve` still not HTTP-tested (no local `KV_REST_API_*`); smoke-test on the Preview deploy. The test phrases from this build are left in `interest_phrases` as cache rows.
 - `NYC_GEOCLIENT_KEY` is now in `.env.local` (for build plan B1); not yet in Vercel.
+
+---
+
+### Phase 3 — Shared ranking ✅ (2026-11-22)
+
+**Shipped:** migration `025_ranking_inputs.sql` (applied): read-only service-role functions `ranking_item_inputs`, `topic_candidates`, `politician_item_roles`, `place_item_ids`, `item_rank_context`, plus `widget_cache.last_requested_at`. `src/lib/ranking/`: `score.ts` (importance §6.2, recency §6.3, widget formulas §6.4, sponsor cap §6.5, all pure), `politicians.ts` (S3 activity §6.7), `precompute.ts`, `config.ts`. `/api/cron/rank-widgets` at `5-59/15 * * * *` (offset from refresh-stats); `npm run rank:widgets`. `GET /api/politicians/active?jurisdictions=…&exclude=…` (cap 8, bodies interleaved, `heading`, `hasMore`). `/api/interests/resolve` serves the cached `interest:{phrase}` widget, or ranks it once with the §6.4 topic formula and caches it. 20 new tests (64 total): importance, recency, sponsor-cap edge cases, a neutrality guard that fails if party/ideology/stance direction is read, S3 scoring, and snapshot top-10s for sample widgets on a fixed fixture.
+
+**Ran live:** 5,063 live items scored; 82 widgets (`jurisdiction:city`, 27 `topic:*`, 52 `politician:*`, `trending`, `politicians:active`) in ~20 s. Importance spans 9–64 (median 23). Interest widget: first request ~1 s warm (up to 3 s cold), then ~300 ms from cache.
+
+**Decisions made during the build:**
+- **Scoring in TypeScript, inputs in SQL.** SQL aggregates per item so raw per-user rows never leave the DB; party is never selected anywhere. Makes the snapshot and neutrality tests possible.
+- **Engagement sources:** views from `engagement_events`; stances (all four states, incl. watching; direction never read), comments (not hidden) and saves from their own tables, since comments are never logged as events. Account age = `user_profiles.created_at` at the time of the action; no profile counts as a new account.
+- **Hearings:** "Hearing Held by Committee", "Hearing on P-C Item by Comm" and "Hearing Held by Mayor" history actions, plus scheduled future events. (Only 5 `events` rows link to a bill; history covers ~3,900.)
+- **Smoothing (§6.2):** items with no actions score 0; engaged items are smoothed toward the mean of *engaged* items at their level, weighted by action count (prior 10). Smoothing toward an all-items mean would rank an item with one guest view below items with none. Percentiles make any monotonic transform a no-op, so the smoothing only matters when evidence (action count) differs at equal totals.
+- **S3 (§6.7):** all three signals log-scaled → percentile within the body (the plan specified it for bills only). Reason line = strongest signal with a non-zero count: "Introduced N bills this month", "Hearing on Thursday" (≤ 7 days) / "N hearings in the next 2 weeks", "Active on N items this month". Stored in `widget_cache` as `politicians:active`; the endpoint filters by body and `exclude`. Selected places map to NYC Council for every NYC place type; other places have no body yet.
+- **Cache contents:** top 30 items per widget (for "See all"), self-contained (title, stage, URL, dates, score, signals) so a page load is one read. The sponsor cap applies to the first 5 slots.
+- **Which widgets the cycle ranks:** jurisdiction levels with items; every NTA (stored only if it has items) plus followed places; every topic; interest phrases someone follows or requested in the last 7 days; every active legislator; trending. Widgets the run didn't produce are deleted (on-demand writes during the run survive).
+- **On-demand ranking** reads importance + primary sponsors for its ≤ 300 candidates via `item_rank_context`. Request paths cache the ranking config for 60 s; the precompute always reads it fresh. A finished Haiku parse deletes the interest widget so the next request re-ranks with the place.
+
+**Left open:**
+- **Neighborhood "Nearby" fallback** (§6.4) needs NTA adjacency from build plan B1; no neighborhood has items yet anyway (B3).
+- **Joint hearings are duplicated:** Legistar files a joint oversight hearing once per committee (e.g. T2026-2741 / T2026-2742), so the same title can fill two slots. 13 such pairs among live items. Dedupe in the adapter or at display; needs a decision.
+- **Trending is empty** (no engagement in the last 7 days) and **no item has `next_event_at`**, so "upcoming" recency and the S3 hearing signal are idle until events link to bills.
+- **Latency:** the new-phrase path is ~1 s warm, over the §7.4 800 ms budget, and cold-cache DB reads vary 10× (13–956 ms for the same vector query). Likely the instance's memory vs ~80 MB of vectors + HNSW index. Settle with the §9 load test; options are a larger compute tier or caching more aggressively.
+- **Q8** (Land Use items vs `local_proposals`) didn't block Phase 3 (`local_proposals` aren't in `content_items` yet) but must be decided before the B3 neighborhood adapter.
+- Hearing items' `last_activity_at` is the hearing date, which can be in the future; recency treats that as "now" (1.0).
 
 ---
 

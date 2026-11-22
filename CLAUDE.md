@@ -150,6 +150,7 @@ legislative-tracker/
 │   │   ├── api/                  # API routes
 │   │   │   ├── cron/             # Vercel cron jobs
 │   │   │   │   ├── sync-legislation/
+│   │   │   │   ├── rank-widgets/     # Widget precompute, every 15 min
 │   │   │   │   └── refresh-stats/
 │   │   │   └── ...
 │   │   ├── actions/              # Server Actions
@@ -221,6 +222,11 @@ legislative-tracker/
 │   │   │   ├── normalize.ts      # Phrase normalization (cache key)
 │   │   │   ├── places.ts         # Place gazetteer + async Haiku parse (§5.3)
 │   │   │   └── interests.ts      # Free-text phrase cache + place-aware matching
+│   │   ├── ranking/              # Shared widget ranking (recommendations-planv1.2.md §6)
+│   │   │   ├── score.ts          # Importance, recency, widget formulas, sponsor cap (pure)
+│   │   │   ├── politicians.ts    # Onboarding S3 activity ranking
+│   │   │   ├── precompute.ts     # 15-minute job → item_importance + widget_cache
+│   │   │   └── config.ts         # Active ranking_config
 │   │   ├── ai/
 │   │   │   └── summarize.ts      # Claude API integration
 │   │   ├── moderation/

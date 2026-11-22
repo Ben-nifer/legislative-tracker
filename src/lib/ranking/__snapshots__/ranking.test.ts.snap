@@ -1,0 +1,50 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`widget snapshots (§9) > jurisdiction:city 1`] = `
+[
+  "item-03 0.7164",
+  "item-05 0.7133",
+  "item-06 0.5278",
+  "item-10 0.4723",
+  "item-12 0.464",
+  "item-01 0.6768",
+  "item-02 0.614",
+  "item-11 0.5748",
+  "item-08 0.3726",
+  "item-07 0.3708",
+]
+`;
+
+exports[`widget snapshots (§9) > politician: co-sponsored items count ×0.6 1`] = `
+[
+  "item-03 0.7164",
+  "item-05 0.7133",
+  "item-01 0.6768",
+  "item-02 0.3684",
+  "item-06 0.3167",
+  "item-04 0.0856",
+]
+`;
+
+exports[`widget snapshots (§9) > topic: tagged items plus near neighbors above the floor 1`] = `
+[
+  "item-02 0.8713",
+  "item-01 0.8701",
+  "item-08 0.7494",
+  "item-10 0.6966",
+  "item-07 0.4969",
+  "item-11 0.6095",
+  "item-03 0.5773",
+  "item-04 0.4645",
+  "item-06 0.3426",
+  "item-09 0.0999",
+]
+`;
+
+exports[`widget snapshots (§9) > trending 1`] = `
+[
+  "item-03 0.022184",
+  "item-10 0.000955",
+  "item-07 0.000599",
+]
+`;

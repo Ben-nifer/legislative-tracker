@@ -10,6 +10,9 @@ import {
   validateHaikuParse,
 } from './places'
 import { EMBEDDING_MODEL, embed, toPgVector } from './voyage'
+import { loadRankingConfig } from '../ranking/config'
+import { rankInterestWidget } from '../ranking/precompute'
+import type { WidgetItem } from '../ranking/score'
 
 // Free-text interests → topic widgets (recommendations-planv1.2.md §5.3, D13, D18, D25, D26).
 // Chip taps never come through here. A typed phrase costs at most one Voyage
@@ -22,6 +25,9 @@ export const MAX_PHRASE_LENGTH = 80
 const DEFAULT_ITEM_COUNT = 20
 const TOPIC_SUGGESTION_COUNT = 3
 
+// Weight changes reach on-demand ranking within a minute
+const CONFIG_MAX_AGE_MS = 60_000
+
 // A background parse not finished after this long is assumed dead and re-queued
 const PARSE_STALE_SECONDS = 300
 
@@ -32,23 +38,7 @@ const PARSE_STALE_SECONDS = 300
 export const TOPIC_SUGGESTION_FLOOR = 0.4
 export const TOPIC_SUGGESTION_MARGIN = 0.06
 
-// Fallback if ranking_config can't be read; matches the v1 and v2 seeds
-const DEFAULT_SIMILARITY_FLOOR = 0.3
-
 export type JurisdictionLevel = 'federal' | 'state' | 'city' | 'neighborhood'
-
-export interface InterestMatch {
-  id: string
-  itemType: string
-  title: string
-  jurisdictionLevel: string
-  stage: string | null
-  url: string
-  legislationId: string | null
-  lastActivityAt: string
-  nextEventAt: string | null
-  similarity: number
-}
 
 export interface TopicSuggestion {
   id: string
@@ -67,8 +57,8 @@ export interface ResolvedInterest {
   parsePending: boolean // a Haiku place parse is running; call again shortly to get the re-ranked widget
   cached: boolean // false = this request wrote the phrase cache row
   model: string
-  // Ordered by relevance until the Phase 3 precompute applies the §6.4 topic formula
-  items: InterestMatch[]
+  configVersion: number // ranking_config version that scored the widget
+  items: WidgetItem[] // the shared interest widget, §6.4 topic formula + sponsor cap
   relatedTopics: TopicSuggestion[]
 }
 
@@ -80,12 +70,6 @@ interface CachedParse {
   place_id: string | null
   parse_method: string
   parse_pending: boolean
-}
-
-async function loadSimilarityFloor(supabase: SupabaseClient): Promise<number> {
-  const { data } = await supabase.from('ranking_config').select('params').eq('active', true).maybeSingle()
-  const floor = data?.params?.similarity_floor
-  return typeof floor === 'number' ? floor : DEFAULT_SIMILARITY_FLOOR
 }
 
 // The vector for topicText: copied from a cached phrase that is exactly topicText
@@ -143,6 +127,9 @@ export async function runHaikuParse(supabase: SupabaseClient, normalizedPhrase: 
     ...vector,
   })
   if (error) console.error(`Interest parse write failed for "${normalizedPhrase}":`, error.message)
+
+  // The widget was ranked without the place; drop it so the next request re-ranks
+  await supabase.from('widget_cache').delete().eq('widget_key', `interest:${normalizedPhrase}`)
 }
 
 export async function resolveInterest(
@@ -207,19 +194,13 @@ export async function resolveInterest(
 
   const place = parse.place_type ? (gazetteer.byKey.get(`${parse.place_type}:${parse.place_id}`) ?? null) : null
 
-  // 6–7. Nearest items inside the place, and related-topic suggestions
+  // 6. The shared interest widget: the precomputed one if it exists (refreshed
+  // every 15 minutes while anyone uses it), otherwise ranked once here and cached (§6.1)
+  const widgetKey = `interest:${normalizedPhrase}`
   const excluded = new Set(options.excludeTopicIds ?? [])
-  const floor = await loadSimilarityFloor(supabase)
-  const [items, topics] = await Promise.all([
-    supabase.rpc('match_interest_items', {
-      p_phrase: normalizedPhrase,
-      p_model: EMBEDDING_MODEL,
-      p_count: options.itemCount ?? DEFAULT_ITEM_COUNT,
-      p_min_similarity: floor,
-      p_levels: options.levels?.length ? options.levels : null,
-      p_place_type: parse.place_type,
-      p_place_id: parse.place_id,
-    }),
+  const [cachedWidget, topics] = await Promise.all([
+    supabase.from('widget_cache').select('items, config_version').eq('widget_key', widgetKey).maybeSingle(),
+    // 7. Related-topic suggestions
     supabase.rpc('match_phrase_topics', {
       p_phrase: normalizedPhrase,
       p_model: EMBEDDING_MODEL,
@@ -227,11 +208,34 @@ export async function resolveInterest(
       p_min_similarity: TOPIC_SUGGESTION_FLOOR,
     }),
   ])
-  if (items.error) throw new Error(`Item match failed: ${items.error.message}`)
+  if (cachedWidget.error) throw new Error(`Widget cache read failed: ${cachedWidget.error.message}`)
   if (topics.error) throw new Error(`Topic match failed: ${topics.error.message}`)
 
+  const requestedAt = new Date()
+  let widgetItems: WidgetItem[]
+  let configVersion: number
+  if (cachedWidget.data) {
+    widgetItems = cachedWidget.data.items as WidgetItem[]
+    configVersion = cachedWidget.data.config_version
+    await supabase.from('widget_cache').update({ last_requested_at: requestedAt.toISOString() }).eq('widget_key', widgetKey)
+  } else {
+    const config = await loadRankingConfig(supabase, CONFIG_MAX_AGE_MS)
+    const placeRef = parse.place_type ? { type: parse.place_type, id: parse.place_id! } : null
+    widgetItems = await rankInterestWidget(supabase, normalizedPhrase, placeRef, config, requestedAt)
+    configVersion = config.version
+    const { error } = await supabase.from('widget_cache').upsert({
+      widget_key: widgetKey,
+      items: widgetItems,
+      config_version: config.version,
+      computed_at: requestedAt.toISOString(),
+      last_requested_at: requestedAt.toISOString(),
+    })
+    if (error) throw new Error(`Widget cache write failed: ${error.message}`)
+  }
+
+  const levels = options.levels?.length ? new Set<string>(options.levels) : null
   return {
-    widgetKey: `interest:${normalizedPhrase}`,
+    widgetKey,
     displayPhrase,
     normalizedPhrase,
     topicText: parse.topic_text,
@@ -240,18 +244,10 @@ export async function resolveInterest(
     parsePending: parse.parse_pending,
     cached,
     model: EMBEDDING_MODEL,
-    items: (items.data ?? []).map((r: Record<string, unknown>) => ({
-      id: r.id as string,
-      itemType: r.item_type as string,
-      title: r.title as string,
-      jurisdictionLevel: r.jurisdiction_level as string,
-      stage: (r.stage as string | null) ?? null,
-      url: r.url as string,
-      legislationId: (r.legislation_id as string | null) ?? null,
-      lastActivityAt: r.last_activity_at as string,
-      nextEventAt: (r.next_event_at as string | null) ?? null,
-      similarity: r.similarity as number,
-    })),
+    configVersion,
+    items: widgetItems
+      .filter((i) => !levels || levels.has(i.jurisdictionLevel))
+      .slice(0, options.itemCount ?? DEFAULT_ITEM_COUNT),
     relatedTopics: pickTopicSuggestions((topics.data ?? []) as TopicSuggestion[], excluded),
   }
 }

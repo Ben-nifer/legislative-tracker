@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test": "vitest run",
     "backfill:content": "tsx --env-file=.env.local scripts/backfill-content-items.ts",
-    "backfill:embeddings": "tsx --env-file=.env.local scripts/backfill-embeddings.ts"
+    "backfill:embeddings": "tsx --env-file=.env.local scripts/backfill-embeddings.ts",
+    "rank:widgets": "tsx --env-file=.env.local scripts/rank-widgets.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
